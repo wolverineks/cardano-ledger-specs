@@ -3,6 +3,7 @@
 #define NONINTEGRAL_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <gmp.h>
 
@@ -14,6 +15,7 @@ int ref_exp(mpz_t, const mpz_t);
 void ref_pow(mpz_t, const mpz_t, const mpz_t);
 void scale(mpz_t);
 void ref_div(mpz_t, const mpz_t, const mpz_t);
+uint8_t compare_threshold_below(uint64_t, uint64_t, uint64_t, uint64_t);
 
 typedef enum { GT, LT, UNKNOWN } estimation;
 

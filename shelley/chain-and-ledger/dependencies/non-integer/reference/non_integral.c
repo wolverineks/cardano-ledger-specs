@@ -7,6 +7,8 @@ mpz_t one;
 mpz_t zero;
 mpz_t precision;
 mpz_t e;
+mpz_t thousand;
+mpz_t max_64bit;
 mpz_t eps;
 int initialized = 0;
 
@@ -39,6 +41,8 @@ void initialize(const mpz_t _precision, const mpz_t epsilon)
   mpz_init_set_ui(one, 1); mpz_mul(one, one, precision);
   mpz_init_set_ui(zero, 0);
   mpz_init_set(eps, epsilon);
+  mpz_init_set_ui(thousand, 1000); mpz_mul(thousand, thousand, precision);
+  mpz_init_set_ui(max_64bit, 2); mpz_pow_ui(max_64bit, max_64bit, 64);
 
   mpz_init(e);
   ref_exp(e, one);
@@ -458,6 +462,57 @@ mp_exp_cmp_result ref_exp_cmp(mpz_t rop, const int maxN, const mpz_t x, const in
   mpz_clear(error); mpz_clear(upper); mpz_clear(lower); mpz_clear(error_term);
 
   result.iterations = n;
+  return result;
+}
+
+/* Convert a `uint64_t` value to fixed_point
+
+   Assumes that the uint64_t contains an inegtral value and multiplies it with
+   the fixed point precision.
+ */
+void mpz_uint64(mpz_t rop, uint64_t src)
+{
+  mpz_import(rop, 1, 1, sizeof(src), 0, 0, &src);
+  mpz_mul(rop, rop, precision);
+}
+
+/* `threshold` is 2^64 * T, with T being the threshold value as in the Praos
+   paper
+
+   `stake_numerator` / `state_denominator` is the relative stake `rel_stake`
+
+   `active_slot_millis` is the active slots coefficient `f` from the Praos paper
+   expressed in 1/1000
+
+   Returns 1 if t <= 1 - (1 - f)^rel_stake
+ */
+uint8_t compare_threshold_below(uint64_t threshold,
+                                uint64_t stake_numerator,
+                                uint64_t stake_denominator,
+                                uint64_t active_slot_millis)
+{
+  uint8_t result = 0;
+  mpz_t t, rel_stake, temp, f;
+  mpz_init(t); mpz_init(rel_stake); mpz_init(temp); mpz_init(f);
+
+  mpz_uint64(t, threshold);
+  div(t, t, max_64bit);
+
+  mpz_uint64(rel_stake, stake_numerator);
+  mpz_uint64(temp, stake_denominator);
+  div(rel_stake, rel_stake, temp);
+
+  mpz_uint64(f, active_slot_millis);
+  div(f, f, thousand);
+
+  mpz_sub(temp, one, f);
+  ref_pow(temp, temp, rel_stake);
+  mpz_sub(temp, one, temp);
+
+  if(mpz_cmp(t, temp) < 0)
+    result = 1;
+
+  mpz_clear(t); mpz_clear(rel_stake); mpz_clear(temp); mpz_clear(f);
   return result;
 }
 
