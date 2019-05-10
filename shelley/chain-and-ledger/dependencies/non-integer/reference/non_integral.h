@@ -6,6 +6,7 @@
 
 #include <gmp.h>
 
+void init();
 void initialize(const mpz_t, const mpz_t);
 void cleanup();
 bool ref_ln(mpz_t, const mpz_t);

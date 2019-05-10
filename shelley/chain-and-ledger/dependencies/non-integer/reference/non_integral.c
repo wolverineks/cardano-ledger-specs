@@ -8,11 +8,33 @@ mpz_t zero;
 mpz_t precision;
 mpz_t e;
 mpz_t eps;
+int initialized = 0;
 
 int mp_exp_taylor(mpz_t, const int, const mpz_t, const mpz_t);
 
+/* Standard initialization with precision of 34 decimal digits and an epsilon
+   of 10e-24 */
+void init()
+{
+  mpz_t precision, ten, epsilon;
+  mpz_init(precision);
+  mpz_init_set_ui(ten, 10);
+  mpz_init(epsilon);
+
+  mpz_pow_ui(precision, ten, 34);
+  mpz_pow_ui(epsilon, ten, 34 - 24);
+  initialize(precision, epsilon);
+
+  mpz_clear(epsilon);
+  mpz_clear(ten);
+  mpz_clear(precision);
+}
+
 void initialize(const mpz_t _precision, const mpz_t epsilon)
 {
+  if(initialized != 0)
+    return;
+
   mpz_init_set(precision, _precision);
   mpz_init_set_ui(one, 1); mpz_mul(one, one, precision);
   mpz_init_set_ui(zero, 0);
@@ -20,6 +42,8 @@ void initialize(const mpz_t _precision, const mpz_t epsilon)
 
   mpz_init(e);
   ref_exp(e, one);
+
+  initialized = 1;
 }
 
 void div_qr(mpz_t q, mpz_t r, const mpz_t x, const mpz_t y)
@@ -74,6 +98,8 @@ void cleanup()
   mpz_clear(precision);
   mpz_clear(eps);
   mpz_clear(e);
+
+  initialized = 0;
 }
 
 void ipow_(mpz_t rop, const mpz_t x, int n)

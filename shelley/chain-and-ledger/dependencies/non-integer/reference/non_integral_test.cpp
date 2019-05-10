@@ -30,18 +30,11 @@ const std::string print_fixedp(
 
 int main()
 {
-
-  mpz_class ten("10");
+  mpz_class ten(10);
   mpz_class precision;
   mpz_pow_ui(precision.get_mpz_t(), ten.get_mpz_t(), 34);
 
-  mpz_class epsilon;
-  mpz_pow_ui(epsilon.get_mpz_t(), ten.get_mpz_t(), 34 - 24);
-
-  mpz_class resolution;
-  mpz_pow_ui(resolution.get_mpz_t(), ten.get_mpz_t(), 17);
-
-  initialize(precision.get_mpz_t(), epsilon.get_mpz_t());
+  init();
 
   std::chrono::duration<double> total =
     std::chrono::duration<double>::zero();
