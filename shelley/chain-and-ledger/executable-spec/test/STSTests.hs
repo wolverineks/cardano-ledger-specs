@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
 
-module STSTests (stsTests) where
+module STSTests where
 
 import           Data.Either (isRight)
 import           Data.Map.Strict (Map)
