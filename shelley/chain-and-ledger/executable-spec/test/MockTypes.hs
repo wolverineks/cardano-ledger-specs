@@ -38,7 +38,7 @@ type VKeyGenesis = Keys.VKeyGenesis MockDSIGN
 
 type EpochState = LedgerState.EpochState ShortHash MockDSIGN
 
-type LedgerState = LedgerState.LedgerState SHA256 MockDSIGN
+type LedgerState = LedgerState.LedgerState ShortHash MockDSIGN
 
 type LedgerValidation = LedgerState.LedgerValidation ShortHash MockDSIGN
 

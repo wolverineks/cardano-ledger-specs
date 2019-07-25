@@ -15,42 +15,31 @@ import           Cardano.Crypto.DSIGN (deriveVerKeyDSIGN, genKeyDSIGN)
 import           Crypto.Random (drgNewTest, withDRG)
 
 import           Examples (CHAINExample (..), ex1, ex2)
-import           MockTypes (Addr, CHAIN, KeyPair, LedgerState, MultiSig, SKey, SKeyES, ScriptHash,
-                     Tx, TxBody, TxId, TxIn, UTXOW, UTxOState, VKey, VKeyES, VKeyGenesis, Wdrl,
-                     KeyHash, DCert, Credential, PoolParams, DPState, LEDGER)
+import           MockTypes (Addr, CHAIN, Credential, DCert, DPState, KeyHash, KeyPair, LEDGER,
+                     LedgerState, MultiSig, PoolParams, SKey, ScriptHash, Tx, TxBody, TxId, TxIn,
+                     UTXOW, UTxOState, VKey, Wdrl)
 
-import           BaseTypes (Seed (..), mkUnitInterval)
-import           BlockChain (pattern BHBody, pattern BHeader, pattern Block, pattern Proof, bhHash,
-                     bhbHash)
+import           BaseTypes (Seed (..), interval0)
 import           Coin
 
 import           Control.State.Transition (PredicateFailure, TRC (..), applySTS)
 
-import           Delegation.Certificates (PoolDistr (..))
-import           EpochBoundary (BlocksMade (..), emptySnapShots)
-import           Keys (pattern Dms, pattern KeyPair, pattern SKey, pattern SKeyES, pattern VKey,
-                     pattern VKeyES, pattern VKeyGenesis, hashKey, sKey, sign, signKES, vKey)
-import           LedgerState (pattern DPState, pattern EpochState, pattern LedgerState,
-                     pattern NewEpochState, pattern UTxOState, emptyAccount, emptyDState,
-                     emptyPState, genesisId, genesisState, _cCounters, _dms, _utxoState,
-                     _delegationState)
-import           OCert (KESPeriod (..), pattern OCert)
-import           PParams (PParams (..), emptyPParams)
-import           Slot (Epoch (..), Slot (..))
+import           Keys (pattern Dms, pattern KeyPair, pattern SKey, pattern VKey, hashKey, vKey)
+import           LedgerState (genesisId, genesisState, _delegationState, _utxoState)
+import           PParams (emptyPParams)
+import           Slot (Slot (..))
 
 import           STS.Updn (UPDN)
 import           STS.Utxow (PredicateFailure (..))
 import           Tx (hashScript)
-import           TxData (pattern AddrBase, pattern KeyHashObj, pattern RequireAllOf,
-                     pattern RequireAnyOf, pattern RequireMOf, pattern RequireSignature,
+import           TxData (pattern AddrBase, pattern Delegate, pattern Delegation, Ix,
+                     pattern KeyHashObj, pattern KeyHashObj, pattern PoolParams, pattern RegPool,
+                     pattern RequireAllOf, pattern RequireAnyOf, pattern RequireMOf,
+                     pattern RequireSignature, pattern RewardAcnt, pattern ScriptHashObj,
                      pattern StakeKeys, pattern StakePools, pattern Tx, pattern TxBody,
-                     pattern TxIn, pattern TxOut, _body, pattern ScriptHashObj,
-                     pattern RewardAcnt, pattern KeyHashObj, pattern Delegation,
-                     pattern Delegate, pattern RegPool, pattern PoolParams,
-                     _certs, Ix)
-import           Updates (emptyUpdate, emptyUpdateState)
-import           UTxO (UTxO (..), makeWitnessesVKey, txid)
-
+                     pattern TxIn, pattern TxOut, _body, _certs)
+import           Updates (emptyUpdate)
+import           UTxO (makeWitnessesVKey, txid)
 
 -- | The UPDN transition should update both the evolving nonce and
 -- the candidate nonce during the first two-thirds of the epoch.
