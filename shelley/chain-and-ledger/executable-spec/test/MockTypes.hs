@@ -1,7 +1,7 @@
 module MockTypes where
 
 import           Cardano.Crypto.DSIGN (MockDSIGN)
-import           Cardano.Crypto.Hash (SHA256)
+import           Cardano.Crypto.Hash (ShortHash)
 import           Cardano.Crypto.KES (MockKES)
 
 import qualified BlockChain
@@ -10,20 +10,21 @@ import qualified Keys
 import qualified LedgerState
 import qualified OCert
 import qualified STS.Chain
+import qualified STS.Ledger
 import qualified STS.Utxow
 import qualified Tx
 import qualified TxData
 import qualified UTxO
 
-type DCert = Delegation.Certificates.DCert SHA256 MockDSIGN
+type DCert = Delegation.Certificates.DCert ShortHash MockDSIGN
 
-type Delegation = TxData.Delegation SHA256 MockDSIGN
+type Delegation = TxData.Delegation ShortHash MockDSIGN
 
-type PoolParams = TxData.PoolParams SHA256 MockDSIGN
+type PoolParams = TxData.PoolParams ShortHash MockDSIGN
 
-type RewardAcnt = TxData.RewardAcnt SHA256 MockDSIGN
+type RewardAcnt = TxData.RewardAcnt ShortHash MockDSIGN
 
-type KeyHash = Keys.KeyHash SHA256 MockDSIGN
+type KeyHash = Keys.KeyHash ShortHash MockDSIGN
 
 type KeyPair = Keys.KeyPair MockDSIGN
 
@@ -35,37 +36,37 @@ type KeyPairs = LedgerState.KeyPairs MockDSIGN
 
 type VKeyGenesis = Keys.VKeyGenesis MockDSIGN
 
-type EpochState = LedgerState.EpochState SHA256 MockDSIGN
+type EpochState = LedgerState.EpochState ShortHash MockDSIGN
 
 type LedgerState = LedgerState.LedgerState SHA256 MockDSIGN
 
-type LedgerValidation = LedgerState.LedgerValidation SHA256 MockDSIGN
+type LedgerValidation = LedgerState.LedgerValidation ShortHash MockDSIGN
 
-type UTxOState = LedgerState.UTxOState SHA256 MockDSIGN
+type UTxOState = LedgerState.UTxOState ShortHash MockDSIGN
 
-type DState = LedgerState.DState SHA256 MockDSIGN
+type DState = LedgerState.DState ShortHash MockDSIGN
 
-type PState = LedgerState.PState SHA256 MockDSIGN
+type PState = LedgerState.PState ShortHash MockDSIGN
 
-type DPState = LedgerState.DPState SHA256 MockDSIGN
+type DPState = LedgerState.DPState ShortHash MockDSIGN
 
-type Addr = TxData.Addr SHA256 MockDSIGN
+type Addr = TxData.Addr ShortHash MockDSIGN
 
-type Tx = Tx.Tx SHA256 MockDSIGN
+type Tx = Tx.Tx ShortHash MockDSIGN
 
-type TxBody = Tx.TxBody SHA256 MockDSIGN
+type TxBody = Tx.TxBody ShortHash MockDSIGN
 
-type TxIn = Tx.TxIn SHA256 MockDSIGN
+type TxIn = Tx.TxIn ShortHash MockDSIGN
 
-type TxOut = Tx.TxOut SHA256 MockDSIGN
+type TxOut = Tx.TxOut ShortHash MockDSIGN
 
-type TxId = TxData.TxId SHA256 MockDSIGN
+type TxId = TxData.TxId ShortHash MockDSIGN
 
-type UTxO = UTxO.UTxO SHA256 MockDSIGN
+type UTxO = UTxO.UTxO ShortHash MockDSIGN
 
-type Block = BlockChain.Block SHA256 MockDSIGN MockKES
+type Block = BlockChain.Block ShortHash MockDSIGN MockKES
 
-type BHBody = BlockChain.BHBody SHA256 MockDSIGN MockKES
+type BHBody = BlockChain.BHBody ShortHash MockDSIGN MockKES
 
 type SKeyES = Keys.SKeyES MockKES
 
@@ -77,26 +78,28 @@ type Sig a = Keys.Sig MockDSIGN a
 
 type Proof a = BlockChain.Proof MockDSIGN
 
-type BHeader = BlockChain.BHeader SHA256 MockDSIGN MockKES
+type BHeader = BlockChain.BHeader ShortHash MockDSIGN MockKES
 
 type OCert = OCert.OCert MockDSIGN MockKES
 
-type HashHeader = BlockChain.HashHeader SHA256 MockDSIGN MockKES
+type HashHeader = BlockChain.HashHeader ShortHash MockDSIGN MockKES
 
-type NewEpochState = LedgerState.NewEpochState SHA256 MockDSIGN
+type NewEpochState = LedgerState.NewEpochState ShortHash MockDSIGN
 
-type CHAIN = STS.Chain.CHAIN SHA256 MockDSIGN MockKES
+type CHAIN = STS.Chain.CHAIN ShortHash MockDSIGN MockKES
 
-type UTXOW = STS.Utxow.UTXOW SHA256 MockDSIGN
+type UTXOW = STS.Utxow.UTXOW ShortHash MockDSIGN
 
-type Credential = TxData.Credential SHA256 MockDSIGN
+type LEDGER = STS.Ledger.LEDGER ShortHash MockDSIGN
 
-type StakeCredential = TxData.StakeCredential SHA256 MockDSIGN
+type Credential = TxData.Credential ShortHash MockDSIGN
 
-type MultiSig = TxData.MultiSig SHA256 MockDSIGN
+type StakeCredential = TxData.StakeCredential ShortHash MockDSIGN
 
-type ScriptHash = TxData.ScriptHash SHA256 MockDSIGN
+type MultiSig = TxData.MultiSig ShortHash MockDSIGN
 
-type WitVKey = TxData.WitVKey SHA256 MockDSIGN
+type ScriptHash = TxData.ScriptHash ShortHash MockDSIGN
 
-type Wdrl = TxData.Wdrl SHA256 MockDSIGN
+type WitVKey = TxData.WitVKey ShortHash MockDSIGN
+
+type Wdrl = TxData.Wdrl ShortHash MockDSIGN

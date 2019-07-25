@@ -13,27 +13,43 @@ import           Test.Tasty.HUnit (Assertion, assertBool, testCase, (@?=))
 
 import           Cardano.Crypto.DSIGN (deriveVerKeyDSIGN, genKeyDSIGN)
 import           Crypto.Random (drgNewTest, withDRG)
-import           Examples (CHAINExample (..), ex1, ex2)
-import           MockTypes (Addr, CHAIN, KeyPair, LedgerState, MultiSig, SKey, ScriptHash, Tx,
-                     TxBody, TxId, TxIn, UTXOW, UTxOState, VKey, Wdrl)
 
-import           BaseTypes (Seed (..))
-import           Coin (Coin (..))
+import           Examples (CHAINExample (..), ex1, ex2)
+import           MockTypes (Addr, CHAIN, KeyPair, LedgerState, MultiSig, SKey, SKeyES, ScriptHash,
+                     Tx, TxBody, TxId, TxIn, UTXOW, UTxOState, VKey, VKeyES, VKeyGenesis, Wdrl,
+                     KeyHash, DCert, Credential, PoolParams, DPState, LEDGER)
+
+import           BaseTypes (Seed (..), mkUnitInterval)
+import           BlockChain (pattern BHBody, pattern BHeader, pattern Block, pattern Proof, bhHash,
+                     bhbHash)
+import           Coin
+
 import           Control.State.Transition (PredicateFailure, TRC (..), applySTS)
-import           Keys (pattern Dms, pattern KeyPair, pattern SKey, pattern VKey, hashKey, vKey)
-import           LedgerState (genesisId, genesisState, _utxoState)
-import           PParams (emptyPParams)
-import           Slot (Slot (..))
+
+import           Delegation.Certificates (PoolDistr (..))
+import           EpochBoundary (BlocksMade (..), emptySnapShots)
+import           Keys (pattern Dms, pattern KeyPair, pattern SKey, pattern SKeyES, pattern VKey,
+                     pattern VKeyES, pattern VKeyGenesis, hashKey, sKey, sign, signKES, vKey)
+import           LedgerState (pattern DPState, pattern EpochState, pattern LedgerState,
+                     pattern NewEpochState, pattern UTxOState, emptyAccount, emptyDState,
+                     emptyPState, genesisId, genesisState, _cCounters, _dms, _utxoState,
+                     _delegationState)
+import           OCert (KESPeriod (..), pattern OCert)
+import           PParams (PParams (..), emptyPParams)
+import           Slot (Epoch (..), Slot (..))
+
 import           STS.Updn (UPDN)
 import           STS.Utxow (PredicateFailure (..))
 import           Tx (hashScript)
 import           TxData (pattern AddrBase, pattern KeyHashObj, pattern RequireAllOf,
                      pattern RequireAnyOf, pattern RequireMOf, pattern RequireSignature,
-                     pattern RewardAcnt, pattern ScriptHashObj, pattern StakeKeys,
-                     pattern StakePools, pattern Tx, pattern TxBody, pattern TxIn, pattern TxOut,
-                     _body)
-import           Updates (emptyUpdate)
-import           UTxO (makeWitnessesVKey, txid)
+                     pattern StakeKeys, pattern StakePools, pattern Tx, pattern TxBody,
+                     pattern TxIn, pattern TxOut, _body, pattern ScriptHashObj,
+                     pattern RewardAcnt, pattern KeyHashObj, pattern Delegation,
+                     pattern Delegate, pattern RegPool, pattern PoolParams,
+                     _certs, Ix)
+import           Updates (emptyUpdate, emptyUpdateState)
+import           UTxO (UTxO (..), makeWitnessesVKey, txid)
 
 
 -- | The UPDN transition should update both the evolving nonce and
@@ -159,6 +175,10 @@ dariaStake = KeyPair vk sk
 dariaAddr :: Addr
 dariaAddr = mkAddr (dariaPay, dariaStake)
 
+
+poolKey :: KeyPair
+poolKey = KeyPair vk sk
+  where (sk, vk) = mkKeyPair (8, 8, 8, 8, 8)
 
 -- Multi-signature scripts
 singleKeyOnly :: Addr -> MultiSig
@@ -486,3 +506,36 @@ testRwdAliceSignsAlone''' =
   where utxoSt' =
           applyTxWithScript [(aliceOnly, 11000)] [aliceOnly] (Map.singleton (RewardAcnt (ScriptHashObj $ hashScript bobOnly)) 1000) 0 [alicePay, bobPay]
         bobOnly = singleKeyOnly bobAddr
+
+delegationCert :: Credential -> KeyHash -> DCert
+delegationCert from to = Delegate (Delegation from to)
+
+
+stakePool :: KeyPair -> PoolParams
+stakePool pkey = PoolParams
+                  (vKey pkey)
+                  (Coin 0)
+                  Map.empty
+                  (Coin 0)
+                  interval0
+                  Nothing
+                  (RewardAcnt (KeyHashObj . hashKey . vKey $ pkey))
+                  Set.empty
+
+poolRegCert :: KeyPair -> DCert
+poolRegCert kp = RegPool $ stakePool kp
+
+-- | Add certificate 'dc' at the end of sequence in 'txbody'
+addCertificate :: DCert -> TxBody -> TxBody
+addCertificate dc txbody = txbody { _certs = (_certs txbody) ++ [dc] }
+
+startState :: (UTxOState, DPState)
+startState = (_utxoState genesis, _delegationState genesis)
+
+applyLEDGER
+  :: (Slot, Ix)
+  -> (UTxOState, DPState)
+  -> Tx
+  -> Either [[PredicateFailure LEDGER]] (UTxOState, DPState)
+applyLEDGER (s, ix) state tx =
+  applySTS @LEDGER (TRC((s, ix, emptyPParams), state, tx))
