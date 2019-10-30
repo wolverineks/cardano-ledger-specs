@@ -1,0 +1,149 @@
+\documentclass[11pt,a4paper,dvipsnames,twosided,final]{article}
+
+\usepackage[deliverable]{IOHKCoverPage}
+
+% data for Deliverable header -- added by KH from an EU H2020 project template
+\DeliverableNumber{SL-D10}
+\DeliverableTitle{Integration of the Shelley Ledger with the Praos Consensus Mechanism}{Consensus and Ledger Integration}
+\DeliverableResponsible{Formal Methods Team}
+\EditorName{Kevin Hammond, \IOHK}
+\Authors{Kevin Hammond \quad \texttt{<kevin.hammond@iohk.io>}
+}
+\DueDate{30$^{\textrm{th}}$ November 2019}
+\SubmissionDate{29$^{\textrm{th}}$ October 2019}{2019/10/29}
+\LeaderName{Philipp Kant, \IOHK}
+\InstitutionAddress{\IOHK}
+\Version{0.1}
+\Project{Shelley Ledger}
+\DisseminationDR
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{lscape}
+\usepackage{iohk}
+\usepackage{microtype}
+\usepackage{mathpazo} % nice fonts
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{latexsym}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{extarrows}
+\usepackage{slashed}
+\usepackage[unicode=true,pdftex,pdfa,colorlinks=true]{hyperref}
+\usepackage{xcolor}
+\definecolor{green}{rgb}{0.0,0.34,0.25}
+\usepackage[capitalise,noabbrev,nameinlink]{cleveref}
+\usepackage{float}
+\restylefloat{figure}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{enumerate}
+
+%% Commenting -- KH
+\usepackage[obeyFinal]{todonotes}
+\newcommand{\khcomment}[1]{\todo[color=blue!20]{KH: #1}}
+\newcommand{\jccomment}[1]{\todo[color=green!20]{JC: #1}}
+\newcommand{\wjcomment}[1]{\todo[color=red!20]{WJ: #1}}
+\newcommand{\jdcomment}[1]{\todo[color=magenta!20]{JD: #1}}
+\newcommand{\edvcomment}[1]{\todo[color=cyan!20]{EDV: #1}}
+
+\newcommand{\ada}{ADA{}}
+\newcommand{\ADA}[1]{\textbf{\emph{\ada~{#1}}}}
+\newcommand{\cardano}[1]{Cardano}
+
+%% In-para enumeration -- KH
+\usepackage{paralist}
+
+\usepackage{caption}
+
+\renewcommand{\floatpagefraction}{0.9}
+
+\begin{document}
+
+\hypersetup{
+  pdftitle={Integration of the Shelley Ledger with the Praos Consensus Mechanism},
+  breaklinks=true,
+  bookmarks=true,
+  colorlinks=false,
+  linkcolor={blue},
+  citecolor={blue},
+  urlcolor={blue},
+  linkbordercolor={white},
+  citebordercolor={white},
+  urlbordercolor={white}
+}
+
+  \cleardoublepage%
+  \tableofcontents%
+  \listoffigures%
+  \clearpage%
+
+  \begin{changelog}
+        \change{2019/10/29}{Kevin Hammond}{FM (\IOHK)}{Initial Version (0.1).}
+      \end{changelog}
+      \clearpage%
+\begin{landscape}
+\floatstyle{plain}
+\restylefloat{figure}
+\begin{figure*}
+%\includegraphics[draft,scale=0.8,angle=90]{d10-depends.pdf}
+\caption{Positioning of this Deliverable (outlined in red).}
+\end{figure*}
+\end{landscape}
+%\floatstyle{boxed}
+\restylefloat{figure}
+\pagestyle{empty}
+\cleardoublepage
+% \begin{center}
+% \large{Executive Summary}
+% \end{center}
+
+% \cleardoublepage
+% \renewcommand{\thepage}{\arabic{page}}
+% \setcounter{page}{1}
+
+\title{Integration of the Shelley Ledger with the Praos Consensus Mechanism}
+
+\author{Kevin Hammond  \\ {\small \texttt{kevin.hammond@iohk.io}}}
+\author{Jared Corduan  \\ {\small \texttt{@iohk.io}}}
+\author{Wolfgang Jeltsch  \\ {\small \texttt{@iohk.io}}}
+\author{Javier Diaz  \\ {\small \texttt{@iohk.io}}}
+\author{Edsko de Vries  \\ {\small \texttt{@iohk.io}}}
+
+\maketitle
+
+\begin{abstract}
+  \noindent
+  This document describes how the consensus layer integrates with the Shelley ledger.
+  It is intended to expose the top level properties and interfaces that will enable
+  full linkage between the two layers, ensuring that key properties that are required
+  for Praos consensus are preserved by the ledger, and conversely ensuring that the consensus
+  layer correctly provides all the necessary pre-conditions that are needed to ensure
+  the overall soundness of the Shelley implementation.
+\end{abstract}
+
+\thispagestyle{empty}
+\clearpage
+\pagestyle{myheadings}
+\renewcommand{\thepage}{\arabic{page}}
+\setcounter{page}{1}
+\section{Introduction}
+\label{sec:introduction}
+
+\clearpage
+\bibliographystyle{habbrv}
+\bibliography{references}
+
+\clearpage
+\appendix
+
+%% Just in case. KH
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
