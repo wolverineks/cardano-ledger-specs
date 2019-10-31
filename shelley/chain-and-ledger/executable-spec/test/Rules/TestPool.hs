@@ -126,29 +126,7 @@ registeredPoolIsAdded env ssts =
 
   addedRegPool :: SourceSignalTarget POOL
                -> m ()
-  addedRegPool sst =
-    case signal sst of
-      RegPool poolParams -> check poolParams
-      _ -> pure ()
-   where
-    check :: PoolParams -> m ()
-    check poolParams = do
-      let hk = poolParams ^. poolPubKey
-          sSt = source sst
-          tSt = target sst
-      -- Check for pool re-registration. If we register a pool which was already
-      -- registered (indicated by presence in `stPools`), then we check that it
-      -- is not in `retiring` after the signal has been processed.
-      when (hk ∈ dom (sSt ^. stPools . to (\(StakePools x) -> x))) $ do
-        assert (hk ∈ dom (sSt ^. retiring))
-        assert (hk ∉ dom (tSt ^. retiring))
-      -- PoolParams are registered in pParams map
-      M.lookup hk (tSt ^. pParams) === Just poolParams
-      -- Hashkey is registered in stPools map
-      M.lookup hk (tSt ^. stPools . to (\(StakePools x) -> x))
-        === Just (ledgerSlot env)
-      -- Hashkey is registered in cCounters map
-      assert (hk ∈ M.keys (tSt ^. cCounters))
+  addedRegPool _sst = True === False
 
 -- | Assert that PState maps are in sync with each other after each `Signal
 -- POOL` transition.
