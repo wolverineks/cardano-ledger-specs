@@ -25,8 +25,7 @@ import           Control.State.Transition.Trace (SourceSignalTarget, pattern Sou
 
 import           BaseTypes ((==>))
 import           Delegation.Certificates (cwitness)
-import           LedgerState (pattern PState, pParams, retiring, stPools, _retiring,
-                     _stPools)
+import           LedgerState (pattern PState, pParams, retiring, stPools, _retiring, _stPools)
 import           MockTypes (KeyHash, LEDGER, POOL, PState, PoolParams, StakePools)
 import           PParams (_eMax)
 import           Slot (Epoch (..), epochFromSlot)
@@ -147,6 +146,31 @@ registeredPoolIsAdded env ssts =
       -- Hashkey is registered in stPools map
       M.lookup hk (tSt ^. stPools . to (\(StakePools x) -> x))
         === Just (ledgerSlot env)
+
+-- | Check that a `RetirePool` certificate properly retires a stake pool.
+retiredPoolIsRemoved
+  :: forall m
+   . MonadTest m
+  => Environment LEDGER
+  -> [SourceSignalTarget POOL]
+  -> m ()
+retiredPoolIsRemoved _env ssts =
+  mapM_ check ssts
+ where
+  check :: SourceSignalTarget POOL
+        -> m ()
+  check sst =
+    case signal sst of
+      -- We omit a well-formedness check for `epoch`, because the executable
+      -- spec will throw a PredicateFailure in that case.
+      RetirePool hk _epoch -> wasRemoved hk
+      _ -> pure ()
+   where
+    wasRemoved :: KeyHash -> m ()
+    wasRemoved hk = do
+      assert (hk ∈ dom (source sst ^. (stPools . to (\(StakePools x) -> x))))
+      assert (hk ∉ dom (source sst ^. retiring))
+      assert (hk ∈ dom (target sst ^. retiring))
 
 -- | Assert that PState maps are in sync with each other after each `Signal
 -- POOL` transition.

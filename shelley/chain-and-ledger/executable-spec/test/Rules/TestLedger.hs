@@ -8,6 +8,7 @@ module Rules.TestLedger
   , credentialRemovedAfterDereg
   , consumedEqualsProduced
   , registeredPoolIsAdded
+  , retiredPoolIsRemoved
   , pStateIsInternallyConsistent
   )
 where
@@ -118,6 +119,20 @@ registeredPoolIsAdded = do
                                      mkGenesisLedgerState
             `ofLengthAtLeast` 1
     TestPool.registeredPoolIsAdded
+      (tr ^. traceEnv)
+      (concatMap ledgerToPoolSsts (sourceSignalTargets tr))
+
+
+-- | Check that a `RetirePool` certificate properly removes a stake pool.
+retiredPoolIsRemoved :: Property
+retiredPoolIsRemoved = do
+  withTests (fromIntegral numberOfTests) . property $ do
+    tr <- forAll
+          $ traceOfLengthWithInitState @LEDGER
+                                     (fromIntegral traceLen)
+                                     mkGenesisLedgerState
+            `ofLengthAtLeast` 1
+    TestPool.retiredPoolIsRemoved
       (tr ^. traceEnv)
       (concatMap ledgerToPoolSsts (sourceSignalTargets tr))
 

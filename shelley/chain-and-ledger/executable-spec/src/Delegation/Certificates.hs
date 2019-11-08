@@ -22,6 +22,7 @@ module Delegation.Certificates
   , isRegKey
   , isDeRegKey
   , isRegPool
+  , isRetirePool
   , isInstantaneousRewards
   , requiresVKeyWitness
   ) where
@@ -103,6 +104,11 @@ isDeRegKey _ = False
 isRegPool :: DCert hashAlgo dsignAlgo vrfAlgo -> Bool
 isRegPool (RegPool _) = True
 isRegPool _ = False
+
+-- | Check for `RetirePool` constructor
+isRetirePool :: DCert hashAlgo dsignAlgo vrfAlgo -> Bool
+isRetirePool (RetirePool _ _) = True
+isRetirePool _ = False
 
 decayKey :: PParams -> (Coin, UnitInterval, Rational)
 decayKey pc = (dval, dmin, lambdad)
