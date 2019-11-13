@@ -9,7 +9,6 @@ import           Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           Lens.Micro ((^.))
 import           Test.QuickCheck (shrinkIntegral, shrinkList)
 
 import           Coin
@@ -22,20 +21,20 @@ shrinkTx
   :: Crypto crypto
   => Tx crypto
   -> [Tx crypto]
-shrinkTx tx =
-  Tx <$> shrinkTxBody (tx ^. body)
-     <*> shrinkSet shrinkWitVKey (tx ^. witnessVKeySet)
-     <*> shrinkMap shrinkScriptHash shrinkMultiSig (tx ^. witnessMSigMap)
+shrinkTx (Tx b ws wm) =
+  [ Tx b' ws wm | b' <- shrinkTxBody b ] ++
+  [ Tx b ws' wm | ws' <- shrinkSet shrinkWitVKey ws ] ++
+  [ Tx b ws wm' | wm' <- shrinkMap shrinkScriptHash shrinkMultiSig wm ]
 
 shrinkTxBody :: TxBody crypto -> [TxBody crypto]
-shrinkTxBody txBody =
-  TxBody <$> shrinkSet shrinkTxIn (txBody ^. inputs)
-         <*> shrinkList shrinkTxOut (txBody ^. outputs)
-         <*> shrinkSeq shrinkDCert (txBody ^. certs)
-         <*> shrinkWdrl (txBody ^. wdrls)
-         <*> shrinkCoin (txBody ^. txfee)
-         <*> shrinkSlot (txBody ^. ttl)
-         <*> shrinkUpdate (txBody ^. txUpdate)
+shrinkTxBody (TxBody is os cs ws tf tl tu) =
+  [ TxBody is' os cs ws tf tl tu | is' <- shrinkSet shrinkTxIn is ] ++
+  [ TxBody is os' cs ws tf tl tu | os' <- shrinkList shrinkTxOut os ] ++
+  [ TxBody is os cs' ws tf tl tu | cs' <- shrinkSeq shrinkDCert cs ] ++
+  [ TxBody is os cs ws' tf tl tu | ws' <- shrinkWdrl ws ] ++
+  [ TxBody is os cs ws tf' tl tu | tf' <- shrinkCoin tf ] ++
+  [ TxBody is os cs ws tf tl' tu | tl' <- shrinkSlot tl ] ++
+  [ TxBody is os cs ws tf tl tu' | tu' <- shrinkUpdate tu ]
 
 shrinkTxIn :: TxIn crypto -> [TxIn crypto]
 shrinkTxIn = const []
@@ -88,5 +87,5 @@ shrinkMap shrinkK shrinkV
   = (M.fromList <$>) . shrinkList shrinkPair . M.toList
  where
   shrinkPair (x, y) =
-    [ (x', y) | x' <- shrinkK x ]
-    ++ [ (x, y') | y' <- shrinkV y ]
+    [ (x', y) | x' <- shrinkK x ] ++
+    [ (x, y') | y' <- shrinkV y ]

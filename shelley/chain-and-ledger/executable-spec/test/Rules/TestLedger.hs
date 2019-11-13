@@ -5,6 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Rules.TestLedger
   ( rewardZeroAfterReg
   , credentialRemovedAfterDereg
