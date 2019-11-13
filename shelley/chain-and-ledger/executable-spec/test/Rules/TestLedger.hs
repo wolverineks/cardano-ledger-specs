@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -18,11 +20,14 @@ import           Data.Word (Word64)
 import           Lens.Micro ((^.))
 
 import           Hedgehog (Property, forAll, property, withTests)
+import qualified Test.QuickCheck as QC
+import qualified Test.QuickCheck.Hedgehog as QC
 
-import           Control.State.Transition.Generator (ofLengthAtLeast, trace,
-                     traceOfLengthWithInitState)
+import           Control.State.Transition.Generator (HasTrace (envGen, sigGen), ofLengthAtLeast,
+                     trace, traceOfLengthWithInitState)
 import           Control.State.Transition.Trace (SourceSignalTarget (..), source,
                      sourceSignalTargets, target, traceEnv)
+import qualified Control.State.Transition.Trace.Generator.QuickCheck as TQC
 import           Generator.Core (mkGenesisLedgerState)
 import           Generator.LedgerTrace ()
 
@@ -32,6 +37,7 @@ import           LedgerState (pattern DPState, pattern DState, pattern UTxOState
 import           MockTypes (DELEG, LEDGER, POOL)
 import qualified Rules.TestDeleg as TestDeleg
 import qualified Rules.TestPool as TestPool
+import           Shrinkers (shrinkTx)
 import           TxData (body, certs)
 import           UTxO (balance)
 
@@ -124,17 +130,21 @@ registeredPoolIsAdded = do
 
 
 -- | Check that a `RetirePool` certificate properly removes a stake pool.
-retiredPoolIsRemoved :: Property
+retiredPoolIsRemoved :: QC.Property
 retiredPoolIsRemoved = do
-  withTests (fromIntegral numberOfTests) . property $ do
-    tr <- forAll
-          $ traceOfLengthWithInitState @LEDGER
-                                     (fromIntegral traceLen)
-                                     mkGenesisLedgerState
-            `ofLengthAtLeast` 1
-    TestPool.retiredPoolIsRemoved
-      (tr ^. traceEnv)
-      (concatMap ledgerToPoolSsts (sourceSignalTargets tr))
+  QC.withMaxSuccess (fromIntegral numberOfTests) . QC.property $ do
+    let gen = do env0 <- TQC.envGen @LEDGER traceLen
+                 st0 <- QC.hedgehog (mkGenesisLedgerState env0)
+                 TQC.traceFrom @LEDGER
+                   traceLen
+                   traceLen
+                   env0
+                   st0
+                -- `ofLengthAtLeast` 1
+    QC.forAllShrink gen (TQC.shrinkTrace @LEDGER @Word64) $ \tr ->
+      TestPool.retiredPoolIsRemoved
+        (tr ^. traceEnv)
+        (concatMap ledgerToPoolSsts (sourceSignalTargets tr))
 
 
 pStateIsInternallyConsistent :: Property
@@ -163,3 +173,20 @@ ledgerToPoolSsts
   -> [SourceSignalTarget POOL]
 ledgerToPoolSsts (SourceSignalTarget (_, DPState _ p) (_, DPState _ p') tx) =
   [SourceSignalTarget p p' cert | cert <- toList (tx ^. body . certs)]
+
+
+instance TQC.HasTrace LEDGER Word64 where
+
+  -- envGen :: traceGenEnv -> QuickCheck.Gen (Environment sts)
+  envGen = QC.hedgehog . (envGen @LEDGER)
+
+  -- sigGen
+  --   :: traceGenEnv
+  --   -> Environment sts
+  --   -> State sts
+  --   -> QuickCheck.Gen (Signal sts)
+  sigGen _ env0 st0 = do
+    QC.hedgehog (sigGen @LEDGER env0 st0)
+
+  -- shrinkSignal :: Signal sts -> [Signal sts]
+  shrinkSignal = shrinkTx

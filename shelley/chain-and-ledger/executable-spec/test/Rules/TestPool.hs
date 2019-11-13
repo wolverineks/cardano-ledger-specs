@@ -17,6 +17,7 @@ import           Data.Word (Word64)
 import           Lens.Micro (to, (^.))
 
 import           Hedgehog (MonadTest, Property, assert, forAll, property, withTests, (===))
+import qualified Test.QuickCheck as QC
 
 import           Control.State.Transition (Environment, State)
 import           Control.State.Transition.Generator (ofLengthAtLeast, trace)
@@ -149,28 +150,26 @@ registeredPoolIsAdded env ssts =
 
 -- | Check that a `RetirePool` certificate properly retires a stake pool.
 retiredPoolIsRemoved
-  :: forall m
-   . MonadTest m
-  => Environment LEDGER
+  :: Environment LEDGER
   -> [SourceSignalTarget POOL]
-  -> m ()
+  -> QC.Property
 retiredPoolIsRemoved _env ssts =
-  mapM_ check ssts
+  QC.conjoin (map check ssts)
  where
   check :: SourceSignalTarget POOL
-        -> m ()
+        -> QC.Property
   check sst =
     case signal sst of
       -- We omit a well-formedness check for `epoch`, because the executable
       -- spec will throw a PredicateFailure in that case.
       RetirePool hk _epoch -> wasRemoved hk
-      _ -> pure ()
+      _ -> QC.property ()
    where
-    wasRemoved :: KeyHash -> m ()
-    wasRemoved hk = do
-      assert (hk ∈ dom (source sst ^. (stPools . to (\(StakePools x) -> x))))
-      assert (hk ∉ dom (source sst ^. retiring))
-      assert (hk ∈ dom (target sst ^. retiring))
+    wasRemoved :: KeyHash -> QC.Property
+    wasRemoved hk =
+      (hk ∈ dom (source sst ^. (stPools . to (\(StakePools x) -> x))))
+        QC..&. (hk ∉ dom (source sst ^. retiring))
+        QC..&. (hk ∈ dom (target sst ^. retiring))
 
 -- | Assert that PState maps are in sync with each other after each `Signal
 -- POOL` transition.
