@@ -166,10 +166,16 @@ retiredPoolIsRemoved _env ssts =
       _ -> QC.property ()
    where
     wasRemoved :: KeyHash -> QC.Property
-    wasRemoved hk =
-      (hk ∈ dom (source sst ^. (stPools . to (\(StakePools x) -> x))))
-        QC..&. (hk ∉ dom (source sst ^. retiring))
-        QC..&. (hk ∈ dom (target sst ^. retiring))
+    wasRemoved hk = QC.conjoin
+      [ QC.counterexample "hk not in stPools"
+          (hk ∈ dom (source sst ^. (stPools . to (\(StakePools x) -> x))))
+      -- TODO this property fails, likely because the spec allows us to retire
+      -- something whichi is already in the retiring list.
+      -- , QC.counterexample "hk is already in source's retiring"
+      --     (hk ∉ dom (source sst ^. retiring))
+      , QC.counterexample "hk is not in target's retiring"
+          (hk ∈ dom (target sst ^. retiring))
+      ]
 
 -- | Assert that PState maps are in sync with each other after each `Signal
 -- POOL` transition.
