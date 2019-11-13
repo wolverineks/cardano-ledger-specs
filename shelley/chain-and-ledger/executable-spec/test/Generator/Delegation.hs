@@ -41,8 +41,6 @@ import           TxData (Credential (KeyHashObj), pattern PoolParams, RewardAcnt
                      StakePools (StakePools), _poolPubKey, _poolVrf)
 import           UTxO (deposits)
 
-import qualified Debug.Trace as T
-
 -- | Generate certificates and also return the associated witnesses and
 -- deposits and refunds required.
 genDCerts
@@ -191,7 +189,7 @@ genRetirePool
   -> Slot
   -> Gen (Maybe (DCert, KeyPair))
 genRetirePool availableKeys pp pState slot =
-  if T.trace (show poolHashKeys) (null availableKeys || null poolHashKeys)
+  if (null availableKeys || null poolHashKeys)
      then pure Nothing
      else (\keyHash epoch ->
               Just (RetirePool keyHash epoch, findKeyPair keyHash))
