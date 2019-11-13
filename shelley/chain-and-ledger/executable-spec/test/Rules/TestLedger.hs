@@ -25,6 +25,7 @@ import           Hedgehog (Property, forAll, property, withTests)
 import qualified Test.QuickCheck as QC
 import qualified Test.QuickCheck.Hedgehog as QC
 
+import           Control.State.Transition (Environment)
 import           Control.State.Transition.Generator (HasTrace (envGen, sigGen), ofLengthAtLeast,
                      trace, traceOfLengthWithInitState)
 import           Control.State.Transition.Trace (SourceSignalTarget (..), source,
@@ -39,7 +40,7 @@ import           LedgerState (pattern DPState, pattern DState, pattern UTxOState
 import           MockTypes (DELEG, LEDGER, POOL)
 import qualified Rules.TestDeleg as TestDeleg
 import qualified Rules.TestPool as TestPool
-import           Shrinkers (shrinkTx)
+import           Shrinkers (shrinkDCert, shrinkTx)
 import           TxData (body, certs)
 import           UTxO (balance)
 
@@ -137,17 +138,24 @@ retiredPoolIsRemoved = do
   QC.withMaxSuccess (fromIntegral numberOfTests) . QC.property $ do
     let gen = do env0 <- TQC.envGen @LEDGER traceLen
                  st0 <- QC.hedgehog (mkGenesisLedgerState env0)
-                 TQC.traceFrom @LEDGER
-                   traceLen
-                   traceLen
-                   env0
-                   st0
+                 tr <- TQC.traceFrom @LEDGER
+                         traceLen
+                         traceLen
+                         env0
+                         st0
+                 pure (env0, (concatMap ledgerToPoolSsts
+                                        (sourceSignalTargets tr)))
                 -- `ofLengthAtLeast` 1
-    QC.forAllShrink gen (TQC.shrinkTrace @LEDGER @Word64) $ \tr ->
-      TestPool.retiredPoolIsRemoved
-        (tr ^. traceEnv)
-        (concatMap ledgerToPoolSsts (sourceSignalTargets tr))
+    QC.forAllShrinkShow gen shrinkPoolSST (show . snd) $ \(env, sst) ->
+      TestPool.retiredPoolIsRemoved env sst
 
+shrinkPoolSST :: (Environment LEDGER, [SourceSignalTarget POOL]) -> [(Environment LEDGER, [SourceSignalTarget POOL])]
+shrinkPoolSST (env, ssts) =
+  [ (env, ssts') | ssts' <- QC.shrinkList shrinker ssts ]
+ where
+  shrinker :: SourceSignalTarget POOL -> [SourceSignalTarget POOL]
+  shrinker (SourceSignalTarget src tgt sig) =
+    [ SourceSignalTarget src tgt sig' | sig' <- shrinkDCert sig ]
 
 pStateIsInternallyConsistent :: Property
 pStateIsInternallyConsistent = do
