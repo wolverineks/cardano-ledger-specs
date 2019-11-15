@@ -30,3 +30,25 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/goblins
   tag: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
+
+source-repository-package
+  type: git
+  location: /Users/mhueschen/Projects/IOHK-work/c-l-s_deps/quickcheck
+  tag: d2f3ef0b0e5dcd30eda3fc26a91f9685c4b4372e
+
+source-repository-package
+  type: git
+  location: /Users/mhueschen/Projects/IOHK-work/c-l-s_deps/cryptonite
+  tag: f6d020b4e752b26ed5fdea6e2a275519f783bf8d
+
+source-repository-package
+  type: git
+  location: /Users/mhueschen/Projects/IOHK-work/c-l-s_deps/haskell-hedgehog
+  tag: 36b2643196e06b7a1f31af7cf911511872ce8a3e
+  subdir: hedgehog
+
+source-repository-package
+  type: git
+  location: /Users/mhueschen/Projects/IOHK-work/c-l-s_deps/haskell-hedgehog
+  tag: 36b2643196e06b7a1f31af7cf911511872ce8a3e
+  subdir: hedgehog-quickcheck

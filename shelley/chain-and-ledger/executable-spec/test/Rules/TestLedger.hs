@@ -14,6 +14,7 @@ module Rules.TestLedger
   , registeredPoolIsAdded
   , retiredPoolIsRemoved
   , pStateIsInternallyConsistent
+  , ensureEvalGenNotBorked'
   )
 where
 
@@ -137,7 +138,7 @@ retiredPoolIsRemoved :: QC.Property
 retiredPoolIsRemoved = do
   QC.withMaxSuccess (fromIntegral numberOfTests) . QC.property $ do
     let gen = do env0 <- TQC.envGen @LEDGER traceLen
-                 st0 <- QC.hedgehog (mkGenesisLedgerState env0)
+                 st0 <- QC.hedgehog' "st0" (mkGenesisLedgerState env0)
                  tr <- TQC.traceFrom @LEDGER
                          traceLen
                          traceLen
@@ -148,6 +149,13 @@ retiredPoolIsRemoved = do
                 -- `ofLengthAtLeast` 1
     QC.forAllShrinkShow gen shrinkPoolSST (show . snd) $ \(env, sst) ->
       TestPool.retiredPoolIsRemoved env sst
+
+ensureEvalGenNotBorked' :: QC.Property
+ensureEvalGenNotBorked' = QC.ensureEvalGenNotBorked "wat" gen
+ where
+  gen = do env0 <- envGen @LEDGER traceLen
+           st0 <- mkGenesisLedgerState env0
+           sigGen @LEDGER env0 st0
 
 shrinkPoolSST :: (Environment LEDGER, [SourceSignalTarget POOL]) -> [(Environment LEDGER, [SourceSignalTarget POOL])]
 shrinkPoolSST (env, ssts) =
@@ -188,7 +196,7 @@ ledgerToPoolSsts (SourceSignalTarget (_, DPState _ p) (_, DPState _ p') tx) =
 instance TQC.HasTrace LEDGER Word64 where
 
   -- envGen :: traceGenEnv -> QuickCheck.Gen (Environment sts)
-  envGen = QC.hedgehog . (envGen @LEDGER)
+  envGen = QC.hedgehog' "envGen" . (envGen @LEDGER)
 
   -- sigGen
   --   :: traceGenEnv
@@ -196,7 +204,7 @@ instance TQC.HasTrace LEDGER Word64 where
   --   -> State sts
   --   -> QuickCheck.Gen (Signal sts)
   sigGen _ env0 st0 = do
-    QC.hedgehog (sigGen @LEDGER env0 st0)
+    QC.hedgehog' "sigGen" (sigGen @LEDGER env0 st0)
 
   -- shrinkSignal :: Signal sts -> [Signal sts]
   shrinkSignal = shrinkTx

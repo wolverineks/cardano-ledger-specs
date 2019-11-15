@@ -25,8 +25,9 @@ import           Ledger.Core ((<|))
 import           LedgerState hiding (genDelegs)
 import           PParams
 import           Rules.ClassifyTraces (onlyValidLedgerSignalsAreGenerated, relevantCasesAreCovered)
-import           Rules.TestLedger (credentialRemovedAfterDereg, pStateIsInternallyConsistent,
-                     registeredPoolIsAdded, retiredPoolIsRemoved, rewardZeroAfterReg)
+import           Rules.TestLedger (credentialRemovedAfterDereg, ensureEvalGenNotBorked',
+                     pStateIsInternallyConsistent, registeredPoolIsAdded, retiredPoolIsRemoved,
+                     rewardZeroAfterReg)
 import           Slot
 import           Tx (pattern TxIn, pattern TxOut, body, certs, inputs, outputs, witnessVKeySet,
                      _body, _witnessVKeySet)
@@ -168,9 +169,11 @@ propertyTests = testGroup "Property-Based Testing"
                   -- [ testProperty "newly registered stake pool is added to \
                   --                \appropriate state mappings"
                   --                registeredPoolIsAdded
-                  [ TQC.testProperty "retired stake pool is removed from \
-                                     \appropriate state mappings"
-                                     retiredPoolIsRemoved
+                  -- [ TQC.testProperty "retired stake pool is removed from \
+                  --                    \appropriate state mappings"
+                  --                    retiredPoolIsRemoved
+                  [ TQC.testProperty "evalGen not borked"
+                                     ensureEvalGenNotBorked'
                   -- , testProperty "pool state is internally consistent"
                   --                pStateIsInternallyConsistent
                   ]

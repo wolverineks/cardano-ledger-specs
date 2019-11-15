@@ -155,8 +155,11 @@ test-suite delegation-test
       multiset,
       text,
       microlens,
+      -- no fromJust
       cs-ledger,
+      -- in cardano-base. no fromJust
       cardano-binary,
       cardano-crypto-class,
+      -- no fromJust
       cardano-prelude,
       small-steps
