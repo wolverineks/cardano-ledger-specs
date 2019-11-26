@@ -9,13 +9,13 @@
 \EditorName{Kevin Hammond, \IOHK}
 \Authors{Kevin Hammond \quad \texttt{<kevin.hammond@iohk.io>}
 }
-\DueDate{31$^{\textrm{st}}$ October 2019}
-\SubmissionDate{24$^{\textrm{th}}$ October 2019}{2019/10/24}
+\DueDate{30$^{\textrm{th}}$ November 2019}
+\SubmissionDate{26$^{\textrm{th}}$ November 2019}{2019/11/26}
 \LeaderName{Philipp Kant, \IOHK}
 \InstitutionAddress{\IOHK}
-\Version{0.4}
+\Version{0.5}
 \Project{Shelley Ledger}
-\DisseminationDR
+\DisseminationPU
 
 \usepackage[margin=2.5cm]{geometry}
 \usepackage{lscape}
@@ -83,6 +83,8 @@
         \change{2019/10/17}{Kevin Hammond}{FM (\IOHK)}{Further checking and clarification. Added images.}
         \change{2019/10/24}{Kevin Hammond}{FM (\IOHK)}{Version 0.3.  Included images from calculator.  Further checks and improvements.}
         \change{2019/11/1}{Kevin Hammond}{FM (\IOHK)}{Version 0.4.  Included suggested changes from AS. Changed $k$ to $N^{\textit{Pools}}$. Added short section on private pools.}
+        \change{2019/11/26}{Kevin Hammond}{FM (\IOHK)}{Version 0.5.  Removed number of pools parameter for testnet to ensure consistency with release version.  Altered summary of differences
+          between testnet and mainnet and added description of the Edinburgh workshop, as requested.  First public version of document.}
       \end{changelog}
       \clearpage%
 \begin{landscape}
@@ -367,8 +369,10 @@ StakePools.
 
 \noindent
 In the Incentivised TestNet,
-the target number of StakePools, $N^{\textit{Pools}}$ is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
-In the MainNet, it is expected to rise over time, up to about 1000.
+% the target number of StakePools, $N^{\textit{Pools}}$ is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
+the target number of StakePools, $N^{\textit{Pools}}$, will not be considered in the first release.
+In the MainNet, it is expected is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
+It will therefore rise over time, up to about 1000 for the fully decentralised MainNet.
 The treasury top slice percentage, $T$ is fixed at 10\% of the total distribution per epoch (this is expected to be unchanged in the MainNet).
 The monetary expansion rate, $\textit{Mer}$ is fixed at the equivalent of 10\% per annum, so that precisely 10\% of the \ada{} reserves would be distributed
 if the TestNet were to run for one complete year, or precisely 2.5\% of the \ada{} reserves would be distributed if it were to run for 3 months.
@@ -506,30 +510,32 @@ $D^{Rewards}$ & The \ada{} rewards that are received by $D$ & $R^{\textit{Deleg}
 \noindent
 The rewards that are received by an individual delegator are directly proportional to the
 stake that the delegator has placed in the StakePool, calculated from the net rewards to the
-StakePool.
+StakePool.  This applies to the owner stake as well as to independent delegators.
+If there are multiple owners, rewards will subsequently be distributed between them according to an external
+agreement that will not be governed by or enforced by the TestNet.
 
-\clearpage
-\subsubsection*{The Rewards that are received by each StakePool Owner per Epoch}
+% \clearpage
+% \subsubsection*{The Rewards that are received by each StakePool Owner per Epoch}
 
-\begin{figure}[h!]
-\begin{center}
-\begin{tabular}{||l|p{6cm}|l||}
-  \hline \hline
-\textbf{Parameter}  & \textbf{Definition} & \textbf{Calculated as} \\\hline
-$R^\textit{Owner}$ & The Reward to the Owner(s) & $R^{\textit{Net}} \times {\textit{Pool}}^{\textit{Margin}} $ \\\hline
-$\textit{nOwners}$ & The total number of Owner(s) of the StakePool, $\textit{nOwners} \ge 1$  & \\\hline
-$O^{Rewards}$ & The \ada{} rewards that are received by owner $O$ & $R^\textit{Owner} \div \textit{nOwners}$ \\\hline
-\hline
-\end{tabular}
-\end{center}
-\caption{The Rewards that are received by a specific Owner $O$.}
-\end{figure}
+% \begin{figure}[h!]
+% \begin{center}
+% \begin{tabular}{||l|p{6cm}|l||}
+%   \hline \hline
+% \textbf{Parameter}  & \textbf{Definition} & \textbf{Calculated as} \\\hline
+% $R^\textit{Owner}$ & The Reward to the Owner(s) & $R^{\textit{Net}} \times {\textit{Pool}}^{\textit{Margin}} $ \\\hline
+% $\textit{nOwners}$ & The total number of Owner(s) of the StakePool, $\textit{nOwners} \ge 1$  & \\\hline
+% $O^{Rewards}$ & The \ada{} rewards that are received by owner $O$ & $R^\textit{Owner} \div \textit{nOwners}$ \\\hline
+% \hline
+% \end{tabular}
+% \end{center}
+% \caption{The Rewards that are received by a specific Owner $O$.}
+% \end{figure}
 
-\noindent
-In the Incentivised TestNet, the owner rewards are divided equally among the
-owners, regardless of the proportion of stake that they pledge.  The assumption
-is that, in practice, each owner will pledge an equal amount of stake, but this
-is not enforced by the implementation.
+% \noindent
+% In the Incentivised TestNet, the owner rewards are divided equally among the
+% owners, regardless of the proportion of stake that they pledge.  The assumption
+% is that, in practice, each owner will pledge an equal amount of stake, but this
+% is not enforced by the implementation.
 
 \subsection{Calculating Rewards in External Currencies}
 \label{sec:conversion}
@@ -624,8 +630,10 @@ The \emph{actual gross rewards}, $R^{\textit{Gross}}$ reduce this by its
 \emph{actual performance} in epoch $E$, giving 0.9\% of the total rewards.
 In total, the
 owners and delegators to this StakePool would receive a net reward that was equivalent to 7.11\% per year
-(the ``staking yield'').  If there were 4 owners for the StakePool, each would receive
-25\% of the operator rewards, i.e. $\ADA{158,121.42} \div 4 ~~=~~ \ADA{39,530.355}$.
+(the ``staking yield'').
+We assume that the owners have agreed an equal distribution of rewards.
+If there were 4 owners for the StakePool, each would then receive
+25\% of the owner rewards, i.e. $\ADA{158,121.42} \div 4 ~~=~~ \ADA{39,530.355}$.
 Similarly, a delegator contributing 10\% of the delegated stake would receive 10\% of
 the delegator reward, i.e., $\ADA{12,096,288.83} \div 10 ~~=~~ \ADA{1,209,628.8883}$.
 If we assume that the pool operating cost is accurate, then the net income to the pool owner(s) would be the sum of the
@@ -636,9 +644,11 @@ pool charges and the rewards, i.e. \ADA{367,140.88} or a net return of 18.36\% o
 \label{sec:rewards-return}
 
 In the Incentivised Testnet, rewards will be calculated following the end of the epoch,
-and returned to wallets as part of the transition to the MainNet.
+and returned to wallets as part of the transition to the MainNet.  This will be achieved
+using an instantaneous rewards return mechanism that will not incur any transaction fees.
 \khcomment{JC/MG to expand.}
-\khcomment{TODO: Verify that the Testnet rewards will not be added to stake pots. Still not clear from the Testnet documentation.}
+\khcomment{TODO: Verify that the Testnet rewards will not be added to stake pots.
+  Still not clear from the Testnet documentation, and they are less than two weeks from release.}
 
 \clearpage
 \section{The Full Incentives  Scheme (Shelley MainNet Implementation)}
