@@ -311,8 +311,8 @@ In the Incentivised TestNet, only the first source is likely to be used.
 The rewards that are received by a StakePool will be proportional to the total amount of \ada{} that it controls
 as a fraction of the total \ada{} that is in circulation.  The \emph{treasury top slice} is deducted from the total \emph{rewards}
 for the epoch, then the remainder is distributed proportionately to each StakePool, depending on the stake it controls.  In order to avoid domination by large StakePools,
-a rewards \emph{cap} will be applied to any single pool, based on the target number of StakePools, $N^{\textit{Pools}}$.
-This is described in more detail in Sections~\ref{sec:TestNet} and~\ref{sec:MainNet}.
+in the MainNet, a rewards \emph{cap} will be applied to any single pool, based on the target number of StakePools, $N^{\textit{Pools}}$.
+This is described in more detail in Section~\ref{sec:MainNet}.
 
 \clearpage
 \begin{figure}[h!]
@@ -340,7 +340,7 @@ In return for receiving higher rewards, \emph{pledging} incurs higher risk, requ
 \subsubsection*{The Rewards that are given to Owner(s) and Delegators}
 
 Once the pool operating charges are subtracted from the net rewards, any remaining reward is distributed to the owner(s) and delegators
-in proportion to their pledged/delegated stake.  The Incentivised TestNet uses a simplified scheme for the owner reward calculations.
+in proportion to their pledged/delegated stake.  % The Incentivised TestNet uses a simplified scheme for the owner reward calculations.
 
 
 \clearpage
@@ -359,7 +359,7 @@ StakePools.
 \begin{tabular}{||l|l|p{10cm}|l||}
   \hline \hline
 \textbf{Parameter} & \textbf{Expected Value} & \textbf{Definition} \\\hline
-\textbf{\color{green} $N^{\textit{Pools}}$} & \textbf{\color{green} 50-100} &\textbf{\color{green}  The Target Number of StakePools} \\\hline
+%\textbf{\color{green} $N^{\textit{Pools}}$} & \textbf{\color{green} 50-100} &\textbf{\color{green}  The Target Number of StakePools} \\\hline
 \textbf{\color{green} $T$} & \textbf{\color{green} 10\%} & \textbf{\color{green} The Treasury Top Slice Percentage} \\\hline
 \textbf{\color{green} $\textit{MER}$} & \textbf{\color{green} 10\%}&  \textbf{\color{green} The ``Monetary Expansion Rate'' per Year}\\\hline
 \textbf{\color{green} $\textit{DPE}$} & \textbf{\color{green} 1} & \textbf{\color{green}  Days per Epoch: Duration of a \cardano{} Epoch} \\\hline
@@ -373,8 +373,6 @@ StakePools.
 In the Incentivised TestNet,
 % the target number of StakePools, $N^{\textit{Pools}}$ is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
 the target number of StakePools, $N^{\textit{Pools}}$, will not be considered in the first release.
-In the MainNet, it is expected is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
-It will therefore rise over time, up to about 1000 for the fully decentralised MainNet.
 The treasury top slice percentage, $T$ is fixed at 10\% of the total distribution per epoch (this is expected to be unchanged in the MainNet).
 The monetary expansion rate, $\textit{Mer}$ is fixed at the equivalent of 10\% per annum, so that precisely 10\% of the \ada{} reserves would be distributed
 if the TestNet were to run for one complete year, or precisely 2.5\% of the \ada{} reserves would be distributed if it were to run for 3 months.
@@ -849,7 +847,11 @@ ${\textit{Pledge}}^\%$ & & Fraction of the \ada{} in circulation that is \emph{p
 
 \noindent
 The parameters that govern the StakePool reward calculation are shown above.  Compared with the Incentivised
-TestNet, the only new parameters are the effective rewards rate to the owner(s), $s'$, and the apparent performance of the StakePool, $\textit{Pool}^{\textit{Perf}}$.
+TestNet, the only new parameters are the effective rewards rate to the owner(s), $s'$, the apparent performance of the StakePool, $\textit{Pool}^{\textit{Perf}}$,
+and the target number of StakePools, $N^{\textit{Pools}}$.
+In the MainNet, $N^{\textit{Pools}}$ is expected is expected to be 50-100 initially, but this will be increased as necessary to encourage the creation of more StakePools.
+It will therefore rise over time, up to about 1000 for the fully decentralised MainNet.
+
 The effective rewards rate limits the rewards that the owners can receive.  The \emph{apparent performance} of a StakePool is calculated
 by dividing the fraction of blocks that the StakePool has created by the fraction of the total stake that it controls.  This may be more than 100\%.
 
@@ -1017,7 +1019,7 @@ The lower part of the diagram shows the \ada{} in circulation and the reserves a
 \noindent
 This diagram shows the StakePool-specific parameters, including the total controlled \ada{} and the
 division by owner(s) and delegators.  In the MainNet, 99.37\% of the StakePool \ada{} is owned
-by delegators.  As in the simplified scheme, the StakePool receives all of its optimal rewards, since it controls
+by delegators.  The StakePool receives all of its optimal rewards, since it controls
 exactly the required percentage of stake (1.00\%, corresponding to the limit set from
 the $N^{\textit{Pools}}$ parameter).
 
@@ -1085,17 +1087,20 @@ Monetary Expansion Rate per Year
 & Fixed at 10\%
 & Exponential decay from ~10\%
                                               \\\hline
- Target Number of Stake Pools
+ Target Number of Stake Pools, $N^{\textit{Pools}}$
                  &
-\multicolumn{2}{|p{8cm}||}{
-Identical effect, the MainNet settings will be determined based on feedback from the TestNet.
-The target is expected to grow over time and may reach around 1000.
-It will initially be set low (probably 50 or 100).}
-                                              \\\hline
-Participation
-& Any stakeholder can participate if they hold ADA as of a specific date
-& Any stakeholder can participate if they hold ADA
-                                              \\\hline
+%\multicolumn{2}{|p{8cm}||}{
+%Identical effect, the MainNet settings will be determined based on feedback from the TestNet.
+                   None.
+                   &
+$N^{\textit{Pools}}$ is expected to grow over time and may reach around 1000.
+                     It will initially be set low (probably 50 or 100). %   }
+  \\\hline
+%% No longer relevant?
+% Participation
+% & Any stakeholder can participate if they hold ADA as of a specific date
+% & Any stakeholder can participate if they hold ADA
+%                                               \\\hline
 Transaction Fees
 & None
 & Included in the reward pot
