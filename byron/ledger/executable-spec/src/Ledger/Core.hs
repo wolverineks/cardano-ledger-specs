@@ -209,7 +209,7 @@ minusSlotMaybe (Slot m) (SlotCount n)
   | otherwise = Just . Slot $ m - n
 
 newtype BlockCount = BlockCount { unBlockCount :: Word64 }
-  deriving stock (Generic, Show)
+  deriving stock (Generic, Show, Data)
   deriving newtype (Eq, Ord, Num, Hashable)
 
 instance HasTypeReps BlockCount

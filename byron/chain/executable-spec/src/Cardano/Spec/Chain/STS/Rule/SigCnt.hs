@@ -21,6 +21,8 @@ import           Control.State.Transition
 import           Ledger.Core hiding ((|>))
 import           Ledger.Update hiding (NotADelegate)
 
+import qualified Debug.Trace as Debug
+
 data SIGCNT deriving (Data, Typeable)
 
 instance STS SIGCNT where
@@ -36,7 +38,7 @@ instance STS SIGCNT where
 
   -- | These `PredicateFailure`s are all throwable.
   data PredicateFailure SIGCNT
-    = TooManyIssuedBlocks VKeyGenesis
+    = TooManyIssuedBlocks VKeyGenesis BkSgnCntT BkSgnCntT BlockCount BkSgnCntT
     -- ^ The given genesis key issued too many blocks.
     | NotADelegate
     -- ^ The key signing the block is not a delegate of a genesis key.
@@ -53,7 +55,9 @@ instance STS SIGCNT where
           Just vkG -> do
             let sgs' = S.drop (S.length sgs + 1 - (fromIntegral . unBlockCount $ k)) (sgs |> vkG)
                 nrSignedBks = fromIntegral (S.length (S.filter (==vkG) sgs'))
-            nrSignedBks <= fromIntegral (unBlockCount k) * t' ?! TooManyIssuedBlocks vkG
+                belowThreshold = nrSignedBks <= fromIntegral (unBlockCount k) * t'
+            Debug.trace ("spec: " ++ show (vkG, nrSignedBks, (fromIntegral (unBlockCount k) * t'), k, t', belowThreshold)) belowThreshold
+              ?! TooManyIssuedBlocks vkG nrSignedBks (fromIntegral (unBlockCount k) * t') k t'
             pure $! sgs'
           Nothing -> do
             failBecause NotADelegate
