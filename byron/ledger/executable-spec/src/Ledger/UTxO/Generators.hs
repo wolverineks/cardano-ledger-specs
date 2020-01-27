@@ -21,6 +21,7 @@ import           Hedgehog.Internal.Gen (atLeast, ensure, mapGenT, runDiscardEffe
 import           Hedgehog.Internal.Tree (NodeT (..), TreeT (..), treeValue)
 import qualified Hedgehog.Internal.Tree as Tree
 
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 -- Initial TxOut generator
@@ -74,15 +75,25 @@ genTxFromUTxO
   -- ^ UTxO used to determine which unspent outputs can be used in the
   -- transaction.
   -> Gen Tx
-genTxFromUTxO addrs txfee utxo = subtractFees txfee $ uncurry Tx <$> Gen.filter
+genTxFromUTxO addrs txfee utxo = traceGen ("genTxFromUTxO: ") $ subtractFees txfee $ uncurry Tx <$> Gen.filter
   (not . null . fst)
-  (genInputOutput
+  (traceGen "before filter: " $ genInputOutput
     (M.keys $ unUTxO utxo)
     (maybe 0 (unLovelace . value) . flip M.lookup (unUTxO utxo))
     (fmap (. Lovelace) $ TxOut <$> Gen.element addrs)
     (unLovelace . value)
     (\f out -> out { value = Lovelace . f . unLovelace $ value out })
   )
+
+traceLabelled :: Show a => String -> a -> a
+traceLabelled label x = trace (label ++ show x) x
+
+traceGen :: Show a => String -> Gen a -> Gen a
+traceGen label g = g >>= \x -> trace (label ++ show x) $ return x
+
+traceGenWith :: (a -> String) ->  Gen a -> Gen a
+traceGenWith f g = g >>= \x -> trace (f x) $ return x
+
 
 -- | Ensure we generate a 'Tx' which utilizes enough 'Lovelace' via its inputs
 -- to cover its outputs as well as the transaction fee.
@@ -98,6 +109,7 @@ subtractFees txfee = fmap subtractFees'
   -- transaction fee. This way, we ensure that there will always remain at
   -- least 1 'Lovelace' in the outputs.
   . Gen.filter (\tx -> sum (value <$> outputs tx) > txfee tx)
+  . traceGenWith (\tx -> "before fee check: " ++ show tx ++ " with fee " ++ show (txfee tx))
  where
   subtractFees' tx =
     tx { outputs = subFromList (txfee tx) value updateValue (outputs tx) }
