@@ -149,7 +149,7 @@ instance Relation (Map k v) where
   dom = Map.keysSet
   range = Set.fromList . Map.elems
 
-  s ◁ r = Map.restrictKeys r (toSet s)
+  s ◁ r = Map.restrictKeys r (toSet s) --TIMCHANGED
 
   s ⋪ r = Map.filterWithKey (\k _ -> k `Set.notMember` toSet s) r
 
