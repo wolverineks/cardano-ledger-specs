@@ -43,7 +43,7 @@ import Shelley.Spec.Ledger.BaseTypes
     invalidKey,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (dom, range, singleton, (∈), (∉), (∪), (⋪), (⋫), (⨃))
+import Shelley.Spec.Ledger.Core ( {- dom, -} range, singleton, {- (∈) , -} (∉), (∪), (⋪), (⋫), (⨃))
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
@@ -85,6 +85,7 @@ import Shelley.Spec.Ledger.TxData
     MIRPot (..),
     Ptr,
     RewardAcnt (..),
+    StakeCreds(..),
   )
 
 data DELEG crypto
@@ -211,6 +212,9 @@ instance
         pure $ DuplicateGenesisVRFDELEG vrf
       k -> invalidKey k
 
+inDomain :: Credential 'Staking crypto -> StakeCreds crypto -> Bool
+inDomain cred (StakeCreds themap) = case Map.lookup cred themap of { Just _ -> True; Nothing -> False}
+
 delegationTransition ::
   TransitionRule (DELEG crypto)
 delegationTransition = do
@@ -219,7 +223,8 @@ delegationTransition = do
   case c of
     DCertDeleg (RegKey hk) -> do
       -- note that pattern match is used instead of regCred, as in the spec
-      hk ∉ dom (_stkCreds ds) ?! StakeKeyAlreadyRegisteredDELEG hk
+      -- hk ∉ dom (_stkCreds ds) ?! StakeKeyAlreadyRegisteredDELEG hk
+      not(hk `inDomain` (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk
 
       pure $
         ds
@@ -229,7 +234,8 @@ delegationTransition = do
           }
     DCertDeleg (DeRegKey hk) -> do
       -- note that pattern match is used instead of cwitness, as in the spec
-      hk ∈ dom (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk
+      -- hk ∈ dom (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk
+      hk `inDomain` (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk
 
       let rewardCoin = Map.lookup (RewardAcnt network hk) (_rewards ds)
       rewardCoin == Just 0 ?! StakeKeyNonZeroAccountBalanceDELEG rewardCoin
@@ -243,7 +249,8 @@ delegationTransition = do
           }
     DCertDeleg (Delegate (Delegation hk dpool)) -> do
       -- note that pattern match is used instead of cwitness and dpool, as in the spec
-      hk ∈ dom (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk
+      -- hk ∈ dom (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk
+      hk `inDomain` (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk
 
       pure $
         ds
@@ -255,7 +262,8 @@ delegationTransition = do
       let s' = slot +* Duration sp
           (GenDelegs genDelegs) = _genDelegs ds
 
-      gkh ∈ dom genDelegs ?! GenesisKeyNotInpMappingDELEG gkh
+      -- gkh ∈ dom genDelegs ?! GenesisKeyNotInpMappingDELEG gkh
+      (case Map.lookup gkh genDelegs of { Just _ -> True; Nothing -> False}) ?! GenesisKeyNotInpMappingDELEG gkh
 
       let currentOtherDelegations =
             range $

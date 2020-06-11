@@ -7,13 +7,20 @@ import Criterion.Main -- (bench, bgroup, defaultMain, whnf)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes(UTxOState)
 
 import Test.Shelley.Spec.Ledger.BenchmarkFunctions
-  ( ledgerSpendOneUTxO,
+ ( ledgerSpendOneUTxO,
     ledgerSpendOneGivenUTxO,
-    initUTxO
+    initUTxO,                       -- How to precompute env for the UTxO transactions
+
+    ledgerRegisterOneStakeKey,
+    ledgerDeRegisterOneStakeKey,
+    ledgerStateWithNregisteredKeys, -- How to precompute env for the StakeKey transactions
   )
+
+import Shelley.Spec.Ledger.LedgerState(DPState(..),  UTxOState(..))
 
 given:: Integer -> Benchmark
 given n  = env (return $ initUTxO n) (\ state -> bench ("given "++show n) (whnf ledgerSpendOneGivenUTxO state))
+
 
 
 includes_init :: IO ()
@@ -33,11 +40,26 @@ excludes_init =
        [ given 50, given 500, given 5000, given 50000, given 500000]
     ]
 
-profile :: IO ()
-profile = do
+profileUTxO :: IO ()
+profileUTxO = do
   putStrLn "Enter profiling"
   let ans = ledgerSpendOneGivenUTxO (initUTxO 500000)
   putStrLn ("Exit profiling "++show ans)
 
+-- =========================
+
+touchDPState :: DPState crypto -> Int
+touchDPState (DPState _x _y) = 1
+
+touchUTxOState:: Shelley.Spec.Ledger.LedgerState.UTxOState cryto -> Int
+touchUTxOState (UTxOState _utxo _deposited _fees _ppups) = 2
+
+profileCreateRegKeys :: IO ()
+profileCreateRegKeys = do
+  putStrLn "Enter profiling"
+  let state =  ledgerStateWithNregisteredKeys 10000
+  let touch (x,y) = touchUTxOState x + touchDPState y
+  putStrLn ("Exit profiling "++show (touch state))
+
 main :: IO ()
-main = profile
+main = profileCreateRegKeys
