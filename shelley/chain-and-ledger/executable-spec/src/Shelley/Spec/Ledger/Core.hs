@@ -218,6 +218,7 @@ instance Relation (Set (a, b)) where
 
   addpair key val set = Set.insert (key, val) set
 
+
 -- The [(a,b)] instance is used in `stakeDistr` in the file LedgerState.hs
 
 instance Relation [(a, b)] where
