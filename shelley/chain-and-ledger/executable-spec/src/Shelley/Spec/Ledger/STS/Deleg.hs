@@ -212,6 +212,7 @@ instance
         pure $ DuplicateGenesisVRFDELEG vrf
       k -> invalidKey k
 
+-- x `elem` (dom y)
 inDomain :: Credential 'Staking crypto -> StakeCreds crypto -> Bool
 inDomain cred (StakeCreds themap) = case Map.lookup cred themap of { Just _ -> True; Nothing -> False}
 
@@ -228,7 +229,7 @@ delegationTransition = do
 
       pure $
         ds
-          { _stkCreds = _stkCreds ds ∪ singleton hk slot,
+          { _stkCreds = _stkCreds ds ∪ singleton hk slot, -- Map.insertWith (\ x y -> x) hk slot (_stkCreds ds)
             _rewards = _rewards ds ∪ Map.singleton (RewardAcnt network hk) (Coin 0), -- ∪ is override left
             _ptrs = _ptrs ds ∪ Map.singleton ptr hk
           }

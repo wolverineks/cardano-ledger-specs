@@ -807,3 +807,7 @@ instance Relation (StakeCreds crypto) where
   (StakeCreds stkCreds) ▷>= vmin = StakeCreds $ stkCreds ▷>= vmin
 
   size (StakeCreds stkCreds) = size stkCreds
+
+  addpair k v (StakeCreds x) = StakeCreds(addpair k v x)
+
+  haskey k (StakeCreds x) = haskey k x

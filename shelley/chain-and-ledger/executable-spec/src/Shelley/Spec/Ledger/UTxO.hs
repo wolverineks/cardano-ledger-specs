@@ -125,6 +125,10 @@ instance Relation (UTxO crypto) where
 
   size (UTxO utxo) = size utxo
 
+  haskey key (UTxO x) = haskey key x
+
+  addpair key val (UTxO x) = UTxO (addpair key val x)
+
 -- | Compute the hash of a transaction body.
 hashTxBody ::
   Crypto crypto =>

@@ -57,7 +57,7 @@ touchUTxOState (UTxOState _utxo _deposited _fees _ppups) = 2
 profileCreateRegKeys :: IO ()
 profileCreateRegKeys = do
   putStrLn "Enter profiling"
-  let state =  ledgerStateWithNregisteredKeys 1000000  -- using 75,000 and 100,000 causes
+  let state =  ledgerStateWithNregisteredKeys 5000000  -- using 75,000 and 100,000 causes
                                                      -- mainbench: internal error: PAP object entered!
                                                      -- (GHC version 8.6.5 for x86_64_unknown_linux)
                                                      -- Please report this as a GHC bug:  http://www.haskell.org/ghc/reportabug
