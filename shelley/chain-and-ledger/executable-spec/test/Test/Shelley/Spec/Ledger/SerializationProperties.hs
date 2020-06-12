@@ -32,7 +32,8 @@ import Cardano.Binary
   )
 import Cardano.Crypto.DSIGN.Mock (VerKeyDSIGN (..))
 import qualified Cardano.Crypto.Hash as Hash
-import Cardano.Crypto.Hash.Short (ShortHash)
+-- import Cardano.Crypto.Hash.Short (ShortHash)
+import Cardano.Crypto.Hash.Blake2b (Blake2b_256) -- TIMCHANGED
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 import Codec.CBOR.Decoding (Decoder)
@@ -386,7 +387,8 @@ instance Arbitrary (ScriptHash Mock.ConcreteCrypto) where
 instance Arbitrary (MetaDataHash Mock.ConcreteCrypto) where
   arbitrary = MetaDataHash <$> genHash (Proxy @Mock.ConcreteCrypto)
 
-instance Arbitrary (Hash.Hash ShortHash a) where
+-- instance Arbitrary (Hash.Hash ShortHash a) where
+instance Arbitrary (Hash.Hash Blake2b_256 a) where -- TIMCHANGED
   arbitrary = genHash (Proxy @Mock.ConcreteCrypto)
 
 instance Arbitrary (STS.PrtclState Mock.ConcreteCrypto) where
