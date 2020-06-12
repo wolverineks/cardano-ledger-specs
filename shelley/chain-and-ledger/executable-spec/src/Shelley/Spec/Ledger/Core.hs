@@ -174,7 +174,6 @@ instance Relation (Map k v) where
 
   size = fromIntegral . Map.size
 
-<<<<<<< HEAD
   {-# INLINE haskey #-}
   haskey x m = case Map.lookup x m of Just _ -> True; Nothing -> False
 
@@ -183,11 +182,7 @@ instance Relation (Map k v) where
 
   {-# INLINE removekey #-}
   removekey k m = Map.delete k m
-=======
-  haskey x m = case Map.lookup x m of { Just _ -> True; Nothing -> False}
 
-  addpair = Map.insertWith (\ x _y -> x)
->>>>>>> Added two methods to the Relation class: haskey and addpair.
 
 -- | Union override plus is (A\B)∪(B\A)∪{k|->v1+v2 | k|->v1 : A /\ k|->v2 : B}
 (∪+) :: (Ord a, Ord b, Num b) => Map a b -> Map a b -> Map a b

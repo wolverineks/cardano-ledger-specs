@@ -43,7 +43,7 @@ import Shelley.Spec.Ledger.BaseTypes
     invalidKey,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core ( {- dom, -} range, singleton, {- (∈) , -} (∉), (∪), (⋪), (⋫), (⨃))
+import Shelley.Spec.Ledger.Core ( {- dom, singleton, -} range, {- (∈) , (∪), -} (∉), (⋪), (⋫), (⨃), haskey, addpair )
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
@@ -85,7 +85,6 @@ import Shelley.Spec.Ledger.TxData
     MIRPot (..),
     Ptr,
     RewardAcnt (..),
-    StakeCreds(..),
   )
 
 data DELEG crypto
@@ -212,10 +211,6 @@ instance
         pure $ DuplicateGenesisVRFDELEG vrf
       k -> invalidKey k
 
--- x `elem` (dom y)
-inDomain :: Credential 'Staking crypto -> StakeCreds crypto -> Bool
-inDomain cred (StakeCreds themap) = case Map.lookup cred themap of { Just _ -> True; Nothing -> False}
-
 delegationTransition ::
   TransitionRule (DELEG crypto)
 delegationTransition = do
@@ -224,19 +219,19 @@ delegationTransition = do
   case c of
     DCertDeleg (RegKey hk) -> do
       -- note that pattern match is used instead of regCred, as in the spec
-      -- hk ∉ dom (_stkCreds ds) ?! StakeKeyAlreadyRegisteredDELEG hk
-      not(hk `inDomain` (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk
+      -- hk ∉ dom (_stkCreds ds) ?! StakeKeyAlreadyRegisteredDELEG hk    -- TIMCHANGED
+      not(haskey hk (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk  -- TIMCHANGED
 
       pure $
         ds
-          { _stkCreds = _stkCreds ds ∪ singleton hk slot, -- Map.insertWith (\ x y -> x) hk slot (_stkCreds ds)
-            _rewards = _rewards ds ∪ Map.singleton (RewardAcnt network hk) (Coin 0), -- ∪ is override left
-            _ptrs = _ptrs ds ∪ Map.singleton ptr hk
+          { _stkCreds = addpair hk slot (_stkCreds ds), -- _stkCreds ds ∪ singleton hk slot,  -- TIMCHANGED
+            _rewards = addpair  (RewardAcnt network hk) (Coin 0) (_rewards ds),  -- _rewards ds ∪ Map.singleton (RewardAcnt network hk) (Coin 0), -- TIMCHANGED
+            _ptrs = addpair ptr hk (_ptrs ds)  -- _ptrs ds ∪ Map.singleton ptr hk  -- TIMCHANGED
           }
     DCertDeleg (DeRegKey hk) -> do
       -- note that pattern match is used instead of cwitness, as in the spec
-      -- hk ∈ dom (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk
-      hk `inDomain` (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk
+      -- hk ∈ dom (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk -- TIMCHANGED
+      haskey hk (_stkCreds ds) ?! StakeKeyNotRegisteredDELEG hk  -- TIMCHANGED
 
       let rewardCoin = Map.lookup (RewardAcnt network hk) (_rewards ds)
       rewardCoin == Just 0 ?! StakeKeyNonZeroAccountBalanceDELEG rewardCoin
@@ -250,8 +245,8 @@ delegationTransition = do
           }
     DCertDeleg (Delegate (Delegation hk dpool)) -> do
       -- note that pattern match is used instead of cwitness and dpool, as in the spec
-      -- hk ∈ dom (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk
-      hk `inDomain` (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk
+      -- hk ∈ dom (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk -- TIMCHANGED
+      haskey hk (_stkCreds ds) ?! StakeDelegationImpossibleDELEG hk  -- TIMCHANGED
 
       pure $
         ds

@@ -224,7 +224,7 @@ data FutureGenDeleg crypto = FutureGenDeleg
   { fGenDelegSlot :: !SlotNo,
     fGenDelegGenKeyHash :: !(KeyHash 'Genesis crypto)
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 instance NoUnexpectedThunks (FutureGenDeleg crypto)
 
@@ -245,7 +245,7 @@ data InstantaneousRewards crypto = InstantaneousRewards
   { iRReserves :: !(Map (Credential 'Staking crypto) Coin),
     iRTreasury :: !(Map (Credential 'Staking crypto) Coin)
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, NFData)
 
 totalInstantaneousReservesRewards :: InstantaneousRewards crypto -> Coin
 totalInstantaneousReservesRewards (InstantaneousRewards irR _) = sum irR
@@ -289,7 +289,7 @@ data DState crypto = DState
     -- | Instantaneous Rewards
     _irwd :: !(InstantaneousRewards crypto)
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, NFData)
 
 instance NoUnexpectedThunks (DState crypto)
 
@@ -329,7 +329,7 @@ data PState crypto = PState
     -- | A map of retiring stake pools to the epoch when they retire.
     _retiring :: !(Map (KeyHash 'StakePool crypto) EpochNo)
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, NFData)
 
 instance NoUnexpectedThunks (PState crypto)
 
@@ -353,7 +353,7 @@ data DPState crypto = DPState
   { _dstate :: !(DState crypto),
     _pstate :: !(PState crypto)
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, NFData)
 
 instance NoUnexpectedThunks (DPState crypto)
 

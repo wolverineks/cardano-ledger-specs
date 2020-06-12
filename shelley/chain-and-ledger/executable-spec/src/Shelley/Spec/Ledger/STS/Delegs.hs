@@ -34,7 +34,7 @@ import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Shelley.Spec.Ledger.BaseTypes (ShelleyBase, invalidKey)
 import Shelley.Spec.Ledger.Coin (Coin)
-import Shelley.Spec.Ledger.Core (dom, {- (∈), -} (⊆), (⨃))
+import Shelley.Spec.Ledger.Core (dom, {- (∈),  (⊆), -} (⨃))
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState
@@ -129,7 +129,7 @@ delegsTransition = do
           wdrls_ = unWdrl $ _wdrls (_body tx)
           rewards = _rewards ds
 
-      wdrls_ ⊆ rewards
+      Map.isSubmapOfBy (==) wdrls_  rewards          -- wdrls_ ⊆ rewards
         ?! WithdrawalsNotInRewardsDELEGS
           (Map.differenceWith (\x y -> if x /= y then Just x else Nothing) wdrls_ rewards)
 

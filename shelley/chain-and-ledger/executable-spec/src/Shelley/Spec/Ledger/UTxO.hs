@@ -125,9 +125,12 @@ instance Relation (UTxO crypto) where
 
   size (UTxO utxo) = size utxo
 
-  haskey key (UTxO x) = haskey key x
+  {-# INLINE haskey #-}
+  haskey k (UTxO x) = case Map.lookup k x of {Just _ -> True; Nothing -> False}
 
-  addpair key val (UTxO x) = UTxO (addpair key val x)
+  {-# INLINE addpair #-}
+  addpair k v (UTxO x) = UTxO(Map.insertWith (\  y _z -> y) k v x)
+
 
 -- | Compute the hash of a transaction body.
 hashTxBody ::

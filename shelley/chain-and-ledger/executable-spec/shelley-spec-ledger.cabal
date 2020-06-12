@@ -267,6 +267,7 @@ benchmark mainbench
       -Wincomplete-record-updates
       -Wincomplete-uni-patterns
       -Wredundant-constraints
+      -O
   if (!flag(development))
     ghc-options:
       -Werror

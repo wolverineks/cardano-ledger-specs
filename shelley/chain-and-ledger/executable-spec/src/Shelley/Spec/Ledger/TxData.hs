@@ -84,7 +84,7 @@ import Cardano.Binary
 import Cardano.Prelude
   ( AllowThunksIn (..),
     LByteString,
-    NFData,
+    NFData(),
     NoUnexpectedThunks (..),
     Word64,
     catMaybes,
@@ -180,7 +180,7 @@ data PoolMetaData = PoolMetaData
   { _poolMDUrl :: !Url,
     _poolMDHash :: !ByteString
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving (Eq, Ord, Generic, Show, NFData)
 
 instance NoUnexpectedThunks PoolMetaData
 
@@ -244,7 +244,7 @@ data PoolParams crypto = PoolParams
     _poolRelays :: !(StrictSeq StakePoolRelay),
     _poolMD :: !(StrictMaybe PoolMetaData)
   }
-  deriving (Show, Generic, Eq, Ord)
+  deriving (Show, Generic, Eq, Ord, NFData)
   deriving (ToCBOR) via CBORGroup (PoolParams crypto)
   deriving (FromCBOR) via CBORGroup (PoolParams crypto)
 
@@ -808,6 +808,8 @@ instance Relation (StakeCreds crypto) where
 
   size (StakeCreds stkCreds) = size stkCreds
 
-  addpair k v (StakeCreds x) = StakeCreds(addpair k v x)
+  {-# INLINE addpair #-}
+  addpair k v (StakeCreds x) = StakeCreds(Map.insertWith (\  y _z -> y) k v x)
 
-  haskey k (StakeCreds x) = haskey k x
+  {-# INLINE haskey #-}
+  haskey k (StakeCreds x) = case Map.lookup k x of {Just _ -> True; Nothing -> False}  -- haskey k x
