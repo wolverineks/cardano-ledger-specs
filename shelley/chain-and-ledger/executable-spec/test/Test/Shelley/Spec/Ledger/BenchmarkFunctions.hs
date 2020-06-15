@@ -9,6 +9,7 @@ module Test.Shelley.Spec.Ledger.BenchmarkFunctions
 
     ledgerRegisterOneStakeKey,
     ledgerDeRegisterOneStakeKey,
+    ledgerOneRewardWithdrawal,
     ledgerStateWithNregisteredKeys, -- How to precompute env for the StakeKey transactions
 
     ledgerRegisterOneStakePool,
@@ -286,6 +287,37 @@ ledgerDeRegisterOneStakeKey state =
     state
     txDeRegStakeKey
     ledgerEnv
+
+-- ===========================================================
+-- Reward Withdrawal example
+
+-- Create a transaction body that withdrawls from ONE reward account,
+-- corresponding to the key seeded with (1, 0, 0, 0, 0)
+txbWithdrawal :: TxBody
+txbWithdrawal =
+  TxBody
+    (Set.fromList [TxIn genesisId 1])
+    (StrictSeq.fromList [TxOut aliceAddr (Coin 100)])
+    -- Fees and Deposits are set to zero
+    StrictSeq.empty
+    (Wdrl $ Map.singleton (RewardAcnt Testnet firstStakeKeyCred) (Coin 0))
+    (Coin 0)
+    (SlotNo 10)
+    SNothing
+    SNothing
+
+-- Create a transaction that withdrawls from a reward account.
+-- It spends the genesis coin indexed by 1.
+txWithdrawal :: Tx
+txWithdrawal =
+  makeSimpleTx
+    txbWithdrawal
+    [asWitness alicePay, asWitness firstStakeKey]
+
+-- Create a ledger state that has n registers one stake credential,
+-- and degregister one of the keys.
+ledgerOneRewardWithdrawal :: (UTxOState, DPState)  -> Bool
+ledgerOneRewardWithdrawal state = testLEDGER state txWithdrawal ledgerEnv
 
 
 -- ===========================================================================
