@@ -2,6 +2,7 @@
 
 module Main where
 
+import Control.DeepSeq(NFData)
 import Criterion.Main -- (bench, bgroup, defaultMain, whnf)
 
 import Data.Word (Word64)
@@ -25,25 +26,23 @@ import Test.Shelley.Spec.Ledger.BenchmarkFunctions
 
 import Shelley.Spec.Ledger.LedgerState(DPState(..),  UTxOState(..))
 
-given:: Integer -> Benchmark
-given n  = env (return $ initUTxO n) (\ state -> bench ("given "++show n) (whnf ledgerSpendOneGivenUTxO state))
+-- =========================================================================================
+-- Generic function to run 1 transaction over different size environments and States
 
+makeBench :: NFData state => String -> (Word64 -> state) -> (state -> Bool) -> IO()
+makeBench tag initstate action = defaultMain [ bgroup tag $ map runAtSize [50,500,5000,50000] ]
+  where runAtSize n = env(return $ initstate n) (\ state -> bench ("given "++show n) (whnf action state))
+
+-- =================================================
+-- Spending 1 UTxO
 
 includes_init_SpendOneUTxO :: IO ()
 includes_init_SpendOneUTxO =
   defaultMain
-    [ bgroup "ledger" $
+    [ bgroup "Spend 1 UTXO with initialization" $
         fmap
           (\n -> bench (show n) $ whnf ledgerSpendOneUTxO n)
           [50, 500, 5000, 50000]
-    ]
-
-
-excludes_init_SpendOneUTxO :: IO ()
-excludes_init_SpendOneUTxO =
-  defaultMain
-    [ bgroup "ledger" $
-       [ given 50, given 500, given 5000, given 50000, given 500000]
     ]
 
 profileUTxO :: IO ()
@@ -71,33 +70,6 @@ profileCreateRegKeys = do
   let touch (x,y) = touchUTxOState x + touchDPState y
   putStrLn ("Exit profiling "++show (touch state))
 
-givenStake:: Word64 -> Benchmark
-givenStake n  = env (return $ ledgerStateWithNregisteredKeys n) (\ state -> bench ("given "++show n) (whnf ledgerRegisterOneStakeKey state))
-
-
-excludes_init_RegOneStakeKey :: IO ()
-excludes_init_RegOneStakeKey =
-  defaultMain
-    [ bgroup "RegStake " $
-       [ givenStake 50, givenStake 500, givenStake 5000, givenStake 50000]
-    ]
-
-givenDeRegStake:: Word64 -> Benchmark
-givenDeRegStake n  = env (return $ ledgerStateWithNregisteredKeys n) (\ state -> bench ("given "++show n) (whnf ledgerDeRegisterOneStakeKey state))
-
-
-profile_DeRegOneStakeKey :: IO ()
-profile_DeRegOneStakeKey = do
-  putStrLn "Enter profiling"
-  let state =  ledgerStateWithNregisteredKeys 50000
-  let ans = ledgerDeRegisterOneStakeKey state
-  putStrLn ("Exit profiling "++show ans)
-
-excludes_init_DeRegOneStakeKey :: IO ()
-excludes_init_DeRegOneStakeKey =
-  defaultMain
-    [ bgroup "RegStake " $ (map givenDeRegStake [50,500,5000,50000])
-    ]
 
 -- ==========================================
 -- Registering Pools
@@ -112,8 +84,13 @@ profileCreateRegPools size = do
 -- ======================================
 
 main :: IO ()
--- main = excludes_init_SpendOneUTxO
--- main = excludes_init_RegOneStakeKey
--- main = excludes_init_DeRegOneStakeKey
--- main = profile_DeRegOneStakeKey
-main = profileCreateRegPools 100000
+-- main = profileUTxO
+-- main = includes_init_SpendOneUTxO
+-- main = makeBench "SpendOneUTxO "  (initUTxO . fromIntegral) ledgerSpendOneGivenUTxO
+-- main = profileCreateRegPools 10000
+-- main = makeBench "RegisterStakeKey " ledgerStateWithNregisteredKeys ledgerRegisterOneStakeKey
+-- main = makeBench "DeRegisterStakeKey " ledgerStateWithNregisteredKeys ledgerDeRegisterOneStakeKey
+-- main = profileCreateRegPools 100000
+-- main = makeBench "RegisterStakePool" ledgerStateWithNregisteredPools ledgerRegisterOneStakePool
+-- main = makeBench "ReRegisterStakePool" ledgerStateWithNregisteredPools ledgerReRegisterOneStakePool
+main = makeBench "RetireStakePool" ledgerStateWithNregisteredPools ledgerRetireOneStakePool
