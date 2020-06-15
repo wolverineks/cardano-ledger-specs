@@ -116,4 +116,4 @@ main :: IO ()
 -- main = excludes_init_RegOneStakeKey
 -- main = excludes_init_DeRegOneStakeKey
 -- main = profile_DeRegOneStakeKey
-main = profileCreateRegPools 10000
+main = profileCreateRegPools 100000
