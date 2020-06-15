@@ -842,6 +842,10 @@ witsVKeyNeeded utxo' tx@(Tx txbody _ _) _genDelegs =
     cwitness (DCertGenesis gc) = ([], [asWitness $ genesisCWitness gc])
     cwitness c = error $ show c ++ " does not have a witness"
     certificates = filter requiresVKeyWitness (toList $ _certs txbody)
+    _certificateSet = foldr acc Set.empty (_certs txbody)
+       where acc cert ans | requiresVKeyWitness cert = Set.union ((Set.fromList . getCertHK) cert) ans
+             acc _cert ans = ans
+            --  getCert :: Shelley.Spec.Ledger.TxData.DelegCert crypto ->
     updateKeys = asWitness `Set.map` propWits (txup tx) _genDelegs
 
 -- | Given a ledger state, determine if the UTxO witnesses in a given
