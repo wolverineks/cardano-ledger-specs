@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE PolyKinds #-}
@@ -45,8 +46,9 @@ import Shelley.Spec.Ledger.Keys
   ( KeyRole (..),
     asWitness,
     hashKey,
-    HashType,
+    HashType (..),
     vKey,
+    IsKeyRole,
   )
 import Shelley.Spec.Ledger.LedgerState
   ( AccountState (..),
@@ -96,6 +98,7 @@ import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
     hashKeyVRF,
     Credential,
     KeyHash,
+    ConcreteCrypto,
   )
 import Test.Shelley.Spec.Ledger.Examples
   ( aliceAddr,
@@ -210,11 +213,19 @@ txbFromCerts ix regCerts =
     SNothing
 
 
-makeSimpleTx :: forall (h :: Shelley.Spec.Ledger.Keys.HashType) (wit :: KeyRole h) . TxBody -> [KeyPair wit] -> Tx
-makeSimpleTx body keys =
+makeSimpleTx
+  :: forall (witA :: KeyRole 'AddrHash) (witR :: KeyRole 'RegularHash)
+  . (IsKeyRole witA ConcreteCrypto, IsKeyRole witR ConcreteCrypto)
+  => TxBody
+  -> [KeyPair witA]
+  -> [KeyPair witR]
+  -> Tx
+makeSimpleTx body keysAddr keysReg =
   Tx
     body
-    mempty {addrWits = makeWitnessesVKey (hashTxBody body) keys}
+    mempty { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr 
+           , regWits = makeWitnessesVKey (hashTxBody body) keysReg
+           }
     SNothing
 
 -- Create a transaction that registers n stake credentials.
@@ -223,6 +234,7 @@ txRegStakeKeys ix keys =
   makeSimpleTx
     (txbFromCerts ix $ stakeKeyRegistrations keys)
     [asWitness alicePay]
+    []
 
 initLedgerState :: Integer -> (UTxOState, DPState)
 initLedgerState n = (initUTxO n, emptyDPState)
@@ -282,6 +294,7 @@ txDeRegStakeKey =
   makeSimpleTx
     txbDeRegStakeKey
     [asWitness alicePay, asWitness firstStakeKey]
+    []
 
 -- Create a ledger state that has n registers one stake credential,
 -- and degregister one of the keys.
@@ -317,6 +330,7 @@ txWithdrawal =
   makeSimpleTx
     txbWithdrawal
     [asWitness alicePay, asWitness firstStakeKey]
+    []
 
 -- Create a ledger state that has n registers one stake credential,
 -- and degregister one of the keys.
@@ -366,7 +380,8 @@ txRegStakePools :: Natural -> [KeyPair 'StakePool] -> Tx
 txRegStakePools ix keys =
   makeSimpleTx
     (txbFromCerts ix $ poolRegCerts keys)
-    ((asWitness alicePay) : (asWitness firstStakeKey) : fmap asWitness keys)
+    [asWitness alicePay, asWitness firstStakeKey]
+    (fmap asWitness keys)
 
 -- Create a ledger state that has n registered stake pools.
 -- The keys are seeded with (1, 0, 0, 0, 0) to (n, 0, 0, 0, 0)
@@ -423,7 +438,7 @@ txbRetireStakePool =
 -- Create a transaction that retires a stake pool.
 -- It spends the genesis coin indexed by 1.
 txRetireStakePool :: Tx
-txRetireStakePool = makeSimpleTx txbRetireStakePool [asWitness alicePay, asWitness firstStakePool]
+txRetireStakePool = makeSimpleTx txbRetireStakePool [asWitness alicePay] [asWitness firstStakePool]
 
 -- Create a ledger state with n stake pools and retire the new pool
 -- whose key is seeded with (1, 0, 0, 0, 0).
@@ -466,7 +481,7 @@ txbDelegate =
 
 -- Create a transaction that delegates stake.
 txDelegate :: Tx
-txDelegate = makeSimpleTx txbDelegate [asWitness alicePay, asWitness firstStakeKey]
+txDelegate = makeSimpleTx txbDelegate [asWitness alicePay, asWitness firstStakeKey] []
 
 -- Create a ledger state with n stake keys and m stake pools,
 -- and delegate the first stake key to the first stake pool.
