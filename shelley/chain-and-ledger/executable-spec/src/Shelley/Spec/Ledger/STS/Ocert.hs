@@ -106,4 +106,4 @@ ocertTransition = judgmentContext >>= \(TRC (env, cs, BHeader bhb sigma)) -> do
       pure cs
     Just m -> do
       m <= n ?! KESPeriodWrongOCERT m n
-      pure $ cs ⨃ [(hk, n)]
+      pure $ cs ⨃ (Map.singleton hk n)

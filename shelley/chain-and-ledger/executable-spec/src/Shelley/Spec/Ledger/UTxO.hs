@@ -115,7 +115,7 @@ instance Relation (UTxO crypto) where
 
   (UTxO a) ∪ (UTxO b) = UTxO $ a ∪ b
 
-  (UTxO a) ⨃ b = UTxO $ a ⨃ b
+  (UTxO a) ⨃ (UTxO b) = UTxO $ a ⨃ b
 
   vmax <=◁ (UTxO utxo) = UTxO $ vmax <=◁ utxo
 

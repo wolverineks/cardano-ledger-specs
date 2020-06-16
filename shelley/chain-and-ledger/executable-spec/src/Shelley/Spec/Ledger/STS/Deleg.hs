@@ -250,7 +250,7 @@ delegationTransition = do
 
       pure $
         ds
-          { _delegations = _delegations ds ⨃ [(hk, dpool)]
+          { _delegations = _delegations ds ⨃ (Map.singleton hk dpool)
           }
     DCertGenesis (GenesisDelegCert gkh vkh vrf) -> do
       sp <- liftSTS $ asks stabilityWindow
@@ -279,7 +279,7 @@ delegationTransition = do
 
       pure $
         ds
-          { _fGenDelegs = _fGenDelegs ds ⨃ [(FutureGenDeleg s' gkh, (vkh, vrf))]
+          { _fGenDelegs = _fGenDelegs ds ⨃ (Map.singleton (FutureGenDeleg s' gkh) (vkh, vrf))
           }
     DCertMir (MIRCert targetPot credCoinMap) -> do
       sp <- liftSTS $ asks stabilityWindow

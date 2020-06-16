@@ -794,7 +794,7 @@ instance Relation (StakeCreds crypto) where
 
   (StakeCreds a) ∪ (StakeCreds b) = StakeCreds $ a ∪ b
 
-  (StakeCreds a) ⨃ b = StakeCreds $ a ⨃ b
+  (StakeCreds a) ⨃ (StakeCreds b) = StakeCreds $ a ⨃ b
 
   vmax <=◁ (StakeCreds stkCreds) = StakeCreds $ vmax <=◁ stkCreds
 

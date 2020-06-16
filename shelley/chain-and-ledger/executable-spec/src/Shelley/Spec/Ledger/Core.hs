@@ -64,13 +64,13 @@ class Relation m where
   -- | Domain restriction
   --
   -- Unicode: 25c1
-  (◁), (<|) :: (Ord (Domain m), Foldable f) => f (Domain m) -> m -> m
+  (◁), (<|) :: (Ord (Domain m)) => Set (Domain m) -> m -> m
   s <| r = s ◁ r
 
   -- | Domain exclusion
   --
   -- Unicode: 22ea
-  (⋪), (</|) :: (Ord (Domain m), Foldable f) => f (Domain m) -> m -> m
+  (⋪), (</|) :: (Ord (Domain m)) => Set (Domain m) -> m -> m
   s </| r = s ⋪ r
 
   -- | Range restriction
@@ -89,7 +89,7 @@ class Relation m where
   (∪) :: (Ord (Domain m), Ord (Range m)) => m -> m -> m
 
   -- | Union Override Right
-  (⨃) :: (Ord (Domain m), Ord (Range m), Foldable f) => m -> f (Domain m, Range m) -> m
+  (⨃) :: (Ord (Domain m), Ord (Range m)) => m -> m -> m
 
   -- | Restrict domain to values less or equal than the given value.
   --
@@ -163,7 +163,7 @@ instance Relation (Map k v) where
 
   -- For union override we pass @d1@ as first argument, since 'Map.union' is
   -- left biased.
-  d0 ⨃ d1 = Map.union (Map.fromList . toList $ d1) d0
+  d0 ⨃ d1 = Map.union d1 d0
 
   vmax <=◁ r = Map.filterWithKey (\k _ -> k <= vmax) r
 

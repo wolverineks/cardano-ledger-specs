@@ -28,13 +28,12 @@ import Cardano.Prelude (NoUnexpectedThunks (..))
 import Control.State.Transition ((?!), (?!:), Embed (..), STS (..), TRC (..), TransitionRule, judgmentContext, trans)
 import Data.Map as Map
 import Data.Sequence (Seq (..))
-import qualified Data.Set as Set
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Shelley.Spec.Ledger.BaseTypes (ShelleyBase, invalidKey)
 import Shelley.Spec.Ledger.Coin (Coin)
-import Shelley.Spec.Ledger.Core (dom, {- (∈),  (⊆), -} (⨃))
+import Shelley.Spec.Ledger.Core ( {- dom, (∈), (⊆), -} (⨃))
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState
@@ -133,7 +132,7 @@ delegsTransition = do
         ?! WithdrawalsNotInRewardsDELEGS
           (Map.differenceWith (\x y -> if x /= y then Just x else Nothing) wdrls_ rewards)
 
-      let rewards' = rewards ⨃ [(w, 0) | w <- Set.toList (dom wdrls_)]
+      let rewards' = rewards ⨃ ( fmap (\ _x -> 0) wdrls_ )  -- (Map.fromList [(w, 0) | w <- Set.toList (dom wdrls_)])
 
       pure $ dpstate {_dstate = ds {_rewards = rewards'}}
     gamma :|> c -> do
