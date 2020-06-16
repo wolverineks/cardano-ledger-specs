@@ -223,7 +223,7 @@ data FutureGenDeleg crypto = FutureGenDeleg
   { fGenDelegSlot :: !SlotNo,
     fGenDelegGenKeyHash :: !(KeyHash 'Genesis crypto)
   }
-  deriving (Show, Eq, Ord, Generic, NFData)
+  deriving (Show, Eq, Ord, Generic)
 
 instance NoUnexpectedThunks (FutureGenDeleg crypto)
 
@@ -244,7 +244,7 @@ data InstantaneousRewards crypto = InstantaneousRewards
   { iRReserves :: !(Map (Credential 'Staking crypto) Coin),
     iRTreasury :: !(Map (Credential 'Staking crypto) Coin)
   }
-  deriving (Show, Eq, Generic, NFData)
+  deriving (Show, Eq, Generic)
 
 totalInstantaneousReservesRewards :: InstantaneousRewards crypto -> Coin
 totalInstantaneousReservesRewards (InstantaneousRewards irR _) = sum irR
@@ -288,10 +288,9 @@ data DState crypto = DState
     -- | Instantaneous Rewards
     _irwd :: !(InstantaneousRewards crypto)
   }
-  deriving (Show, Eq, Generic, NFData)
+  deriving (Show, Eq, Generic)
 
 instance NoUnexpectedThunks (DState crypto)
-
 instance NFData (DState crypto)
 
 instance Crypto crypto => ToCBOR (DState crypto) where
@@ -328,7 +327,7 @@ data PState crypto = PState
     -- | A map of retiring stake pools to the epoch when they retire.
     _retiring :: !(Map (KeyHash 'StakePool crypto) EpochNo)
   }
-  deriving (Show, Eq, Generic, NFData)
+  deriving (Show, Eq, Generic)
 
 instance NoUnexpectedThunks (PState crypto)
 
@@ -352,7 +351,7 @@ data DPState crypto = DPState
   { _dstate :: !(DState crypto),
     _pstate :: !(PState crypto)
   }
-  deriving (Show, Eq, Generic, NFData)
+  deriving (Show, Eq, Generic)
 
 instance NoUnexpectedThunks (DPState crypto)
 
@@ -802,15 +801,14 @@ witsVKeyNeeded ::
   UTxO crypto ->
   Tx crypto ->
   GenDelegs crypto ->
-  Set (KeyHash 'Witness crypto)
+  WitHashes crypto
 witsVKeyNeeded utxo' tx@(Tx txbody _ _) genDelegs =
-  inputAuthors
-    `Set.union` wdrlAuthors
-    `Set.union` certAuthors
-    `Set.union` updateKeys
-    `Set.union` owners
-  where
-    inputAuthors :: Set (KeyHash 'Witness crypto)
+     WitHashes
+        { addrWitHashes = fst certAuthors `Set.union` inputAuthors `Set.union` owners `Set.union` wdrlAuthors,
+          regWitHashes = snd certAuthors `Set.union` updateKeys
+        }
+   where
+    inputAuthors :: Set (KeyHash 'AWitness crypto)
     inputAuthors = foldr accum Set.empty (_inputs txbody)
         where accum txin ans =
                  case txinLookup txin utxo' of
@@ -818,28 +816,29 @@ witsVKeyNeeded utxo' tx@(Tx txbody _ _) genDelegs =
                     Just (TxOut (AddrBootstrap bootAddr) _) -> Set.insert (asWitness (bootstrapKeyHash bootAddr)) ans
                     _other -> ans
 
-    wdrlAuthors :: Set (KeyHash 'Witness crypto)
+    wdrlAuthors :: Set (KeyHash 'AWitness crypto)
     wdrlAuthors = Map.foldrWithKey accum Set.empty (unWdrl (_wdrls txbody))
        where accum key _ ans = Set.union (extractKeyHashWitnessSet [getRwdCred key]) ans
 
-    owners :: Set (KeyHash 'Witness crypto)
+    owners :: Set (KeyHash 'AWitness crypto)
     owners = foldr accum Set.empty (_certs txbody)
        where accum (DCertPool (RegPool pool)) ans = Set.union (Set.map asWitness (_poolOwners pool)) ans
              accum _cert ans = ans
 
-    cwitness (DCertDeleg dc) = extractKeyHashWitnessSet [delegCWitness dc]
-    cwitness (DCertPool pc) = extractKeyHashWitnessSet [poolCWitness pc]
-    cwitness (DCertGenesis gc) = Set.singleton(asWitness $ genesisCWitness gc)
+    cwitness (DCertDeleg dc)   = (extractKeyHashWitnessSet [delegCWitness dc], Set.empty)
+    cwitness (DCertPool pc)    = (Set.empty, extractKeyHashWitnessSet [poolCWitness pc])
+    cwitness (DCertGenesis gc) = (Set.empty, Set.singleton(asWitness $ genesisCWitness gc))
     cwitness c = error $ show c ++ " does not have a witness"
                -- key reg requires no witness but this is already filtered outby requiresVKeyWitness
                -- before the call to `cwitness`, so this error should never be reached.
 
-    certAuthors :: Set (KeyHash 'Witness crypto)
-    certAuthors = foldr accum Set.empty (_certs txbody)
-       where accum cert ans | requiresVKeyWitness cert = Set.union (cwitness cert) ans
+    certAuthors :: (Set (KeyHash 'AWitness crypto),Set (KeyHash 'RWitness crypto))
+    certAuthors = foldr accum (Set.empty,Set.empty) (_certs txbody)
+       where accum cert ans | requiresVKeyWitness cert = unionPair (cwitness cert) ans
              accum _cert ans = ans
+             unionPair (x,y) (a,b) = (Set.union x a, Set.union y b)
 
-    updateKeys :: Set (KeyHash 'Witness crypto)
+    updateKeys :: Set (KeyHash 'RWitness crypto)
     updateKeys = asWitness `Set.map` propWits (txup tx) genDelegs
 
 -- | Given a ledger state, determine if the UTxO witnesses in a given

@@ -369,7 +369,9 @@ extractKeyHash =
         _ -> Nothing
     )
 
-extractKeyHashWitnessSet :: [Credential kr crypto] -> Set(KeyHash 'Witness crypto)
+extractKeyHashWitnessSet ::
+   forall (h :: HashType) (r :: KeyRole h) crypto.
+   [Credential r crypto] -> Set (KeyHash (WitnessFor r) crypto)
 extractKeyHashWitnessSet credentials = foldr accum Set.empty credentials
    where accum (KeyHashObj hk) ans = Set.insert (asWitness hk) ans
          accum _other ans = ans

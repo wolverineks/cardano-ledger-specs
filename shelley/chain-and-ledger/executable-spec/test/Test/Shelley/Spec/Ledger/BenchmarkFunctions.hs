@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Test.Shelley.Spec.Ledger.BenchmarkFunctions
   ( ledgerSpendOneUTxO,
@@ -43,6 +45,7 @@ import Shelley.Spec.Ledger.Keys
   ( KeyRole (..),
     asWitness,
     hashKey,
+    HashType,
     vKey,
   )
 import Shelley.Spec.Ledger.LedgerState
@@ -206,7 +209,8 @@ txbFromCerts ix regCerts =
     SNothing
     SNothing
 
-makeSimpleTx :: TxBody -> [KeyPair 'Witness] -> Tx
+
+makeSimpleTx :: forall (h :: Shelley.Spec.Ledger.Keys.HashType) (wit :: KeyRole h) . TxBody -> [KeyPair wit] -> Tx
 makeSimpleTx body keys =
   Tx
     body

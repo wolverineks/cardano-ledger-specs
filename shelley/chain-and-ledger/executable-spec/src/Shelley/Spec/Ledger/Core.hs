@@ -120,23 +120,12 @@ class Relation m where
   haskey key m = key `elem` (dom m)
 
   -- | Insert (key,value) pair into the Relation.  Instances should overide this default with something more efficient
-<<<<<<< HEAD
-  addpair :: (Ord (Domain m), Ord (Range m)) => Domain m -> Range m -> m -> m
-  addpair key val m = m ∪ (singleton key val)
-
-  -- | Remove a key (and its associted value at that key) from the Relation. Instances should overide this default with something more efficient
-  removekey :: Ord (Domain m) => Domain m -> m -> m
-  removekey k m = Set.singleton k ⋪ m
-=======
   addpair :: (Ord(Domain m),Ord(Range m)) => Domain m -> Range m -> m -> m
   addpair key val m = m ∪ (singleton key val)
 
   -- | Remove a key (and its associted value at that key) from the Relation. Instances should overide this default with something more efficient
   removekey :: Ord(Domain m) => Domain m -> m -> m
   removekey k m = Set.singleton k ⋪ m
-
->>>>>>> Trying to get registering pool certificates to scale.
-
 
 
 -- | Alias for 'elem'.
@@ -194,10 +183,6 @@ instance Relation (Map k v) where
   removekey k m = Map.delete k m
 
 
-  {-# INLINE removekey #-}
-  removekey k m = Map.delete k m
-
-
 -- | Union override plus is (A\B)∪(B\A)∪{k|->v1+v2 | k|->v1 : A /\ k|->v2 : B}
 (∪+) :: (Ord a, Ord b, Num b) => Map a b -> Map a b -> Map a b
 a ∪+ b = ((dom a) ⋪ b) ∪ ((dom b) ⋪ a) ∪ (Map.unionWith (+) a b)
@@ -234,15 +219,10 @@ instance Relation (Set (a, b)) where
 
   size = fromIntegral . Set.size
 
-<<<<<<< HEAD
   addpair key val set = Set.insert (key, val) set
-=======
-  addpair key val set = Set.insert (key,val) set
 
->>>>>>> Trying to get registering pool certificates to scale.
 
 -- The [(a,b)] instance is used in `stakeDistr` in the file LedgerState.hs
-
 instance Relation [(a, b)] where
   type Domain [(a, b)] = a
   type Range [(a, b)] = b
