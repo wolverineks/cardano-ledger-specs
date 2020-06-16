@@ -151,13 +151,13 @@ instance Relation (Map k v) where
   dom = Map.keysSet
   range = Set.fromList . Map.elems
 
-  s ◁ r = Map.restrictKeys r (toSet s) --TIMCHANGED
+  s ◁ r = Map.restrictKeys r s --TIMCHANGED
 
-  s ⋪ r = Map.filterWithKey (\k _ -> k `Set.notMember` toSet s) r
+  s ⋪ r = Map.withoutKeys r s  --TIMCHANGED -- Map.filterWithKey (\k _ -> k `Set.notMember` s) r
 
-  r ▷ s = Map.filter (flip Set.member s) r
+  r ▷ s = Map.filter (`Set.member` s) r
 
-  r ⋫ s = Map.filter (flip Set.notMember s) r
+  r ⋫ s = Map.filter (`Set.notMember` s) r
 
   d0 ∪ d1 = Map.union d0 d1
 
