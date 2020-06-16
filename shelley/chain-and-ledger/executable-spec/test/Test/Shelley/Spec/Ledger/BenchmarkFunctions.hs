@@ -6,6 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Test.Shelley.Spec.Ledger.BenchmarkFunctions
+{-
   ( ledgerSpendOneUTxO,
     ledgerSpendOneGivenUTxO,
     initUTxO,                       -- How to precompute env for the UTxO transactions
@@ -23,6 +24,7 @@ module Test.Shelley.Spec.Ledger.BenchmarkFunctions
     ledgerDelegateOneStakeKey,
     ledgerStateWithNkeysMpools, -- How to precompute env for the Stake Delegation transactions
   )
+  -}
 where
 
 import Control.State.Transition.Extended (TRC (..), applySTS)
@@ -46,9 +48,7 @@ import Shelley.Spec.Ledger.Keys
   ( KeyRole (..),
     asWitness,
     hashKey,
-    HashType (..),
     vKey,
-    IsKeyRole,
   )
 import Shelley.Spec.Ledger.LedgerState
   ( AccountState (..),
@@ -98,7 +98,6 @@ import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
     hashKeyVRF,
     Credential,
     KeyHash,
-    ConcreteCrypto,
   )
 import Test.Shelley.Spec.Ledger.Examples
   ( aliceAddr,
@@ -214,16 +213,14 @@ txbFromCerts ix regCerts =
 
 
 makeSimpleTx
-  :: forall (witA :: KeyRole 'AddrHash) (witR :: KeyRole 'RegularHash)
-  . (IsKeyRole witA ConcreteCrypto, IsKeyRole witR ConcreteCrypto)
-  => TxBody
-  -> [KeyPair witA]
-  -> [KeyPair witR]
+  :: TxBody
+  -> [KeyPair 'AWitness]
+  -> [KeyPair 'RWitness]
   -> Tx
 makeSimpleTx body keysAddr keysReg =
   Tx
     body
-    mempty { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr 
+    mempty { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr
            , regWits = makeWitnessesVKey (hashTxBody body) keysReg
            }
     SNothing

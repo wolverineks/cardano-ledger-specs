@@ -21,17 +21,11 @@ import Test.Shelley.Spec.Ledger.BenchmarkFunctions
     ledgerRegisterOneStakePool,
     ledgerReRegisterOneStakePool,
     ledgerRetireOneStakePool,
-    ledgerStateWithNregisteredPools
+    ledgerOneRewardWithdrawal,
+    ledgerStateWithNregisteredPools,  -- How to compute an initial state with N StakePools
   )
 
 import Shelley.Spec.Ledger.LedgerState(DPState(..),  UTxOState(..))
-
--- =========================================================================================
--- Generic function to run 1 transaction over different size environments and States
-
-makeBench :: NFData state => String -> (Word64 -> state) -> (state -> Bool) -> IO()
-makeBench tag initstate action = defaultMain [ bgroup tag $ map runAtSize [50,500,5000,50000] ]
-  where runAtSize n = env(return $ initstate n) (\ state -> bench ("given "++show n) (whnf action state))
 
 -- =================================================
 -- Spending 1 UTxO
@@ -81,6 +75,14 @@ profileCreateRegPools size = do
   let touch (x,y) = touchUTxOState x + touchDPState y
   putStrLn ("Exit profiling "++show (touch state))
 
+
+-- =========================================================================================
+-- Generic function to run 1 transaction over different size environments and States
+
+makeBench :: NFData state => String -> (Word64 -> state) -> (state -> Bool) -> IO()
+makeBench tag initstate action = defaultMain [ bgroup tag $ map runAtSize [50,500,5000,50000,500000] ]
+  where runAtSize n = env(return $ initstate n) (\ state -> bench ("given "++show n) (whnf action state))
+
 -- ======================================
 
 main :: IO ()
@@ -93,4 +95,5 @@ main :: IO ()
 -- main = profileCreateRegPools 100000
 -- main = makeBench "RegisterStakePool" ledgerStateWithNregisteredPools ledgerRegisterOneStakePool
 -- main = makeBench "ReRegisterStakePool" ledgerStateWithNregisteredPools ledgerReRegisterOneStakePool
-main = makeBench "RetireStakePool" ledgerStateWithNregisteredPools ledgerRetireOneStakePool
+-- main = makeBench "RetireStakePool" ledgerStateWithNregisteredPools ledgerRetireOneStakePool
+main = makeBench "RewardWithdrawal" ledgerStateWithNregisteredKeys ledgerOneRewardWithdrawal

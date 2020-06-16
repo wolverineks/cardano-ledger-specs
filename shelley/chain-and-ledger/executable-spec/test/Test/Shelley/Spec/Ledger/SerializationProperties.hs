@@ -129,6 +129,10 @@ import Test.Shelley.Spec.Ledger.Generator.Update (genPParams)
 import Test.Shelley.Spec.Ledger.NonTraceProperties.Generator (genStateTx, genValidStateTx)
 import Test.Tasty.QuickCheck ((===), Gen, Property, choose, counterexample, elements)
 
+
+type ShortHash = Blake2b_256  --TIMCHANGED
+
+
 roundtrip ::
   (Eq a, Show a) =>
   (a -> Encoding) ->
@@ -388,7 +392,7 @@ instance Arbitrary (MetaDataHash Mock.ConcreteCrypto) where
   arbitrary = MetaDataHash <$> genHash (Proxy @Mock.ConcreteCrypto)
 
 -- instance Arbitrary (Hash.Hash ShortHash a) where
-instance Arbitrary (Hash.Hash Blake2b_256 a) where -- TIMCHANGED
+instance Arbitrary (Hash.Hash ShortHash a) where
   arbitrary = genHash (Proxy @Mock.ConcreteCrypto)
 
 instance Arbitrary (STS.PrtclState Mock.ConcreteCrypto) where
