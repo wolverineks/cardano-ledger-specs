@@ -796,12 +796,6 @@ instance Relation (StakeCreds crypto) where
 
   (StakeCreds a) ⨃ (StakeCreds b) = StakeCreds $ a ⨃ b
 
-  vmax <=◁ (StakeCreds stkCreds) = StakeCreds $ vmax <=◁ stkCreds
-
-  (StakeCreds stkCreds) ▷<= vmax = StakeCreds $ stkCreds ▷<= vmax
-
-  (StakeCreds stkCreds) ▷>= vmin = StakeCreds $ stkCreds ▷>= vmin
-
   size (StakeCreds stkCreds) = size stkCreds
 
   {-# INLINE addpair #-}
@@ -809,3 +803,6 @@ instance Relation (StakeCreds crypto) where
 
   {-# INLINE haskey #-}
   haskey k (StakeCreds x) = case Map.lookup k x of {Just _ -> True; Nothing -> False}  -- haskey k x
+
+  {-# INLINE removekey #-}
+  removekey k (StakeCreds m) = StakeCreds (Map.delete k m)

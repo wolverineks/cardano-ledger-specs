@@ -9,8 +9,7 @@
 module Test.Shelley.Spec.Ledger.ConcreteCryptoTypes where
 
 import Cardano.Crypto.DSIGN (MockDSIGN, VerKeyDSIGN)
--- import Cardano.Crypto.Hash (ShortHash)
-import Cardano.Crypto.Hash.Blake2b (Blake2b_256) -- TIMCHANGED
+import Cardano.Crypto.Hash (ShortHash)
 import Cardano.Crypto.KES (MockKES)
 import Data.Map (Map)
 import qualified Shelley.Spec.Ledger.Address as TxData
@@ -47,11 +46,8 @@ import Test.Cardano.Crypto.VRF.Fake (FakeVRF)
 data ConcreteCrypto
 
 instance Crypto ConcreteCrypto where
-  type ADDRHASH ConcreteCrypto = Blake2b_256  -- TIMCHANGED
-  --type HASH ConcreteCrypto = ShortHash
-  type HASH ConcreteCrypto = Blake2b_256  -- TIMCHANGED
-  -- Added a few temporary changes to use a longer hash function than ShortHash.
-  -- One can find these by greping for TIMCHANGE. We can undo these before we try and merge.
+  type ADDRHASH ConcreteCrypto = ShortHash
+  type HASH ConcreteCrypto = ShortHash
   type DSIGN ConcreteCrypto = MockDSIGN
   type KES ConcreteCrypto = MockKES 10
   type VRF ConcreteCrypto = FakeVRF
@@ -73,7 +69,7 @@ type KeyHash kr = Keys.KeyHash kr ConcreteCrypto
 pattern KeyHash ::
   forall (h :: Keys.HashType) (kr :: Keys.KeyRole h).
   ( Keys.AlgorithmForHashType ConcreteCrypto h
-      ~ Blake2b_256    -- ~ ShortHash  --TIMCHANGE
+      ~ ShortHash
   ) =>
   Keys.Hash ConcreteCrypto (VerKeyDSIGN (DSIGN ConcreteCrypto)) ->
   KeyHash (kr :: Keys.KeyRole h)

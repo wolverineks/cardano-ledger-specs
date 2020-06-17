@@ -21,13 +21,12 @@ import Control.State.Transition ((?!), STS (..), TRC (..), TransitionRule, failB
 import Data.Kind (Type)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
--- import qualified Data.Set as Set         -- TIMCHANGED  set no longer needed
 import Data.Typeable (Typeable)
 import Data.Word (Word64, Word8)
 import GHC.Generics (Generic)
 import Shelley.Spec.Ledger.BaseTypes (Globals (..), ShelleyBase, invalidKey)
 import Shelley.Spec.Ledger.Coin (Coin)
-import Shelley.Spec.Ledger.Core ( {- dom,(∈),(∉),(⋪),  -} haskey, addpair, removekey)
+import Shelley.Spec.Ledger.Core (haskey, addpair, removekey)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState (PState (..), emptyPState)
@@ -125,8 +124,7 @@ poolDelegationTransition = do
       poolCost >= minPoolCost ?! StakePoolCostTooLowPOOL poolCost minPoolCost
 
       let hk = _poolPubKey poolParam
-      if -- hk ∉ dom stpools        -- TIMCHANGED
-         not(haskey hk stpools)     -- TIMCHANGED
+      if not(haskey hk stpools)     -- hk ∉ (dom stpools)
         then -- register new, Pool-Reg
 
           pure $
@@ -138,13 +136,11 @@ poolDelegationTransition = do
           pure $
             ps
               { _fPParams = _fPParams ps ⨃ (hk, poolParam),
-                _retiring = -- Set.singleton hk ⋪ _retiring ps   -- TIMCHANGED
-                            removekey hk (_retiring ps)           -- TIMCHANGED
+                _retiring = removekey hk (_retiring ps) -- Set.singleton hk ⋪ _retiring ps
               }
     DCertPool (RetirePool hk (EpochNo e)) -> do
       -- note that pattern match is used instead of cwitness, as in the spec
-      -- hk ∈ dom stpools ?! StakePoolNotRegisteredOnKeyPOOL hk  -- TIMCHANGED
-      haskey hk stpools ?! StakePoolNotRegisteredOnKeyPOOL hk    -- TIMCHANGED
+      haskey hk stpools ?! StakePoolNotRegisteredOnKeyPOOL hk
       EpochNo cepoch <- liftSTS $ do
         ei <- asks epochInfo
         epochInfoEpoch ei slot
@@ -170,13 +166,11 @@ poolDelegationTransition = do
   Map (KeyHash kr crypto) a ->
   (KeyHash kr crypto, a) ->
   Map (KeyHash kr crypto) a
-m ⨃ (k, v) = -- Map.union (Map.singleton k v) m  -- TIMCHANGED
-             Map.insertWith (\ x _ -> x) k v m   -- TIMCHANGED   we want this t be left biased
+m ⨃ (k, v) = Map.insertWith (\ x _ -> x) k v m  -- we want this to be left biased, hence (\ x _ -> x)
 
 (∪) :: Ord a =>
   Map (KeyHash kr crypto) a ->
   (KeyHash kr crypto, a) ->
   Map (KeyHash kr crypto) a
 
-m ∪ (k, v) = -- Map.union m (Map.singleton k v) -- TIMCHANGED
-             addpair k v m                      -- TIMCHANGED
+m ∪ (k, v) = addpair k v m

@@ -117,12 +117,6 @@ instance Relation (UTxO crypto) where
 
   (UTxO a) ⨃ (UTxO b) = UTxO $ a ⨃ b
 
-  vmax <=◁ (UTxO utxo) = UTxO $ vmax <=◁ utxo
-
-  (UTxO utxo) ▷<= vmax = UTxO $ utxo ▷<= vmax
-
-  (UTxO utxo) ▷>= vmin = UTxO $ utxo ▷>= vmin
-
   size (UTxO utxo) = size utxo
 
   {-# INLINE haskey #-}
@@ -130,6 +124,9 @@ instance Relation (UTxO crypto) where
 
   {-# INLINE addpair #-}
   addpair k v (UTxO x) = UTxO(Map.insertWith (\  y _z -> y) k v x)
+
+  {-# INLINE removekey #-}
+  removekey k (UTxO m) =UTxO (Map.delete k m)
 
 
 -- | Compute the hash of a transaction body.

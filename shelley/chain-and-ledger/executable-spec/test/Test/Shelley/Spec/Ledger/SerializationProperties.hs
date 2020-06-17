@@ -32,8 +32,7 @@ import Cardano.Binary
   )
 import Cardano.Crypto.DSIGN.Mock (VerKeyDSIGN (..))
 import qualified Cardano.Crypto.Hash as Hash
--- import Cardano.Crypto.Hash.Short (ShortHash)
-import Cardano.Crypto.Hash.Blake2b (Blake2b_256) -- TIMCHANGED
+import Cardano.Crypto.Hash.Short (ShortHash)
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 import Codec.CBOR.Decoding (Decoder)
@@ -128,9 +127,6 @@ import Test.Shelley.Spec.Ledger.Generator.Presets (genEnv)
 import Test.Shelley.Spec.Ledger.Generator.Update (genPParams)
 import Test.Shelley.Spec.Ledger.NonTraceProperties.Generator (genStateTx, genValidStateTx)
 import Test.Tasty.QuickCheck ((===), Gen, Property, choose, counterexample, elements)
-
-
-type ShortHash = Blake2b_256  --TIMCHANGED
 
 
 roundtrip ::

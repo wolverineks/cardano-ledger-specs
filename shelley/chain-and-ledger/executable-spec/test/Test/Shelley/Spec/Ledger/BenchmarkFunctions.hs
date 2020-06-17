@@ -83,7 +83,7 @@ import Shelley.Spec.Ledger.TxData
     Delegation(..),
   )
 import Shelley.Spec.Ledger.UTxO (hashTxBody, makeWitnessesVKey)
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
+import Test.Shelley.Spec.Ledger.BenchmarkCrypto  -- Types with fixed type parameter: BenchmarkCrypto
   ( DCert,
     DPState,
     KeyPair,
@@ -98,18 +98,33 @@ import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
     hashKeyVRF,
     Credential,
     KeyHash,
-  )
-import Test.Shelley.Spec.Ledger.Examples
-  ( aliceAddr,
-    alicePay,
-    ppsEx1,
-  )
-import Test.Shelley.Spec.Ledger.Utils
-  ( mkKeyPair',
+    pattern KeyPair,  -- Below this line are operations to make things with BenchmarkCrypto fixed types.
+    Addr,
+    mkKeyPair,
+    mkAddr,
+    mkKeyPair',
     runShelleyBase,
     unsafeMkUnitInterval,
     mkVRFKeyPair,
+    ppsEx1
   )
+
+-- =========================================================
+
+aliceStake :: KeyPair 'Staking
+aliceStake = KeyPair vk sk
+  where
+    (sk, vk) = mkKeyPair (0, 0, 0, 0, 1)
+
+alicePay :: KeyPair 'Payment
+alicePay = KeyPair vk sk
+  where
+    (sk, vk) = mkKeyPair (0, 0, 0, 0, 0)
+
+aliceAddr :: Addr
+aliceAddr = mkAddr (alicePay, aliceStake)
+
+-- ==========================================================
 
 coins :: Integer -> [TxOut]
 coins n = fmap (\_ -> TxOut aliceAddr (Coin $ 100)) [0 .. n]

@@ -231,6 +231,7 @@ benchmark mainbench
                     test
   main-is:          Main.hs
   other-modules:    Test.Shelley.Spec.Ledger.BenchmarkFunctions,
+                    Test.Shelley.Spec.Ledger.BenchmarkCrypto,
                     Test.Shelley.Spec.Ledger.ConcreteCryptoTypes,
                     Test.Shelley.Spec.Ledger.Examples,
                     Test.Shelley.Spec.Ledger.Generator.Constants,
