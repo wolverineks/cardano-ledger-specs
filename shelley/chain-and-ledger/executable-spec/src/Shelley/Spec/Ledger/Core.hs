@@ -5,28 +5,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Shelley.Spec.Ledger.Core
-  ( Relation
-      ( (⨃),
-        (∪),
-        dom,
-        range,
-        (◁),
-        (<|),
-        (▷),
-        (|>),
-        singleton,
-        (⋪),
-        (</|),
-        (⋫),
-        (|/>),
-        Domain,
-        Range,
-        haskey,
-        addpair,
-        removekey,
-        -- below are methods not used anywhere
-        size
-      ),
+  ( Relation (..),
+    dom,
+    singleton,
     (⊆),
     (∪+),
     (∈),
@@ -45,14 +26,22 @@ import qualified Data.Set as Set
 -- Domain restriction and exclusion
 ---------------------------------------------------------------------------------
 
+-- | Relation class
+--
+--   For performance reasons, we have a set of rewrite rules which operate on
+--   various operations using relations. Owing to sequencing issues with rewrite
+--   rules and class methods (see
+--   https://gitlab.haskell.org/ghc/ghc/issues/10595) we define a number of our
+--   class methods with the `_Relation` suffix and export an alias on which
+--   rewrite rules can fire before class specialisation happens.
 class Relation m where
   type Domain m :: *
   type Range m :: *
 
-  singleton :: Domain m -> Range m -> m
+  singleton_Relation :: Domain m -> Range m -> m
 
   -- | Domain
-  dom :: Ord (Domain m) => m -> Set (Domain m)
+  dom_Relation :: Ord (Domain m) => m -> Set (Domain m)
 
   -- | Range
   range :: Ord (Range m) => m -> Set (Range m)
@@ -105,12 +94,14 @@ class Relation m where
 -- | Alias for 'elem'.
 --
 -- Unicode: 2208
+{-# INLINE [1] (∈) #-}
 (∈) :: (Eq a, Foldable f) => a -> f a -> Bool
 a ∈ f = elem a f
 
 -- | Alias for not 'elem'.
 --
 -- Unicode: 2209
+{-# INLINE [1] (∉) #-}
 (∉) :: (Eq a, Foldable f) => a -> f a -> Bool
 a ∉ f = not $ elem a f
 
@@ -120,9 +111,9 @@ instance Relation (Map k v) where
   type Domain (Map k v) = k
   type Range (Map k v) = v
 
-  singleton = Map.singleton
+  singleton_Relation = Map.singleton
 
-  dom = Map.keysSet
+  dom_Relation = Map.keysSet
   range = Set.fromList . Map.elems
 
   s ◁ r = Map.restrictKeys r s
@@ -158,9 +149,9 @@ instance Relation (Set (a, b)) where
   type Domain (Set (a, b)) = a
   type Range (Set (a, b)) = b
 
-  singleton a b = Set.singleton (a, b)
+  singleton_Relation a b = Set.singleton (a, b)
 
-  dom = Set.map fst
+  dom_Relation = Set.map fst
 
   range = Set.map snd
 
@@ -187,9 +178,9 @@ instance Relation [(a, b)] where
   type Domain [(a, b)] = a
   type Range [(a, b)] = b
 
-  singleton a b = [(a, b)]
+  singleton_Relation a b = [(a, b)]
 
-  dom = toSet . fmap fst
+  dom_Relation = toSet . fmap fst
 
   range = toSet . fmap snd
 
@@ -225,3 +216,21 @@ toSet = Set.fromList . toList
 
 (∩) :: Ord a => Set a -> Set a -> Set a
 (∩) = intersection
+
+---------------------------------------------------------------------------------
+-- Rewrite rules
+--------------------------------------------------------------------------------
+
+{-# INLINE [1] singleton #-}
+singleton :: Relation m => Domain m -> Range m -> m
+singleton = singleton_Relation
+
+{-# INLINE [1] dom #-}
+dom :: (Relation m, Ord (Domain m)) => m -> Set (Domain m)
+dom = dom_Relation
+
+{-# RULES
+"member/domain" forall x r. x ∈ (dom r) = haskey x r
+"notmember/domain" forall x r. x ∉ (dom r) = not (haskey x r)
+"union/singleton" forall x y r. r ∪ singleton x y = addpair x y r
+  #-}

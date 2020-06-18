@@ -52,7 +52,7 @@ import qualified Data.Set as Set
 import Shelley.Spec.Ledger.Address (Addr (..))
 import Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (Relation (..))
+import Shelley.Spec.Ledger.Core (Relation (..), dom)
 import Shelley.Spec.Ledger.Credential (Credential (..))
 import Shelley.Spec.Ledger.Crypto
 import Shelley.Spec.Ledger.Delegation.Certificates
@@ -99,9 +99,9 @@ instance Relation (UTxO crypto) where
   type Domain (UTxO crypto) = TxIn crypto
   type Range (UTxO crypto) = TxOut crypto
 
-  singleton k v = UTxO $ Map.singleton k v
+  singleton_Relation k v = UTxO $ Map.singleton k v
 
-  dom (UTxO utxo) = dom utxo
+  dom_Relation (UTxO utxo) = dom utxo
 
   range (UTxO utxo) = range utxo
 

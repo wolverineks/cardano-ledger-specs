@@ -26,7 +26,7 @@ import Data.Word (Word64, Word8)
 import GHC.Generics (Generic)
 import Shelley.Spec.Ledger.BaseTypes (Globals (..), ShelleyBase, invalidKey)
 import Shelley.Spec.Ledger.Coin (Coin)
-import Shelley.Spec.Ledger.Core (addpair, haskey, removekey)
+import Shelley.Spec.Ledger.Core (dom, (∉), addpair, haskey, removekey)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState (PState (..), emptyPState)
@@ -124,7 +124,7 @@ poolDelegationTransition = do
       poolCost >= minPoolCost ?! StakePoolCostTooLowPOOL poolCost minPoolCost
 
       let hk = _poolPubKey poolParam
-      if not (haskey hk stpools) -- hk ∉ (dom stpools)
+      if hk ∉ (dom stpools)
         then -- register new, Pool-Reg
 
           pure $

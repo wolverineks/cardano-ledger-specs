@@ -24,13 +24,13 @@ import Cardano.Binary
 import Cardano.Prelude (NoUnexpectedThunks (..))
 import Control.Monad.Trans.Reader (asks)
 import Control.State.Transition
-  ( (?!),
-    STS (..),
+  ( STS (..),
     TRC (..),
     TransitionRule,
     failBecause,
     judgmentContext,
     liftSTS,
+    (?!),
   )
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -43,7 +43,15 @@ import Shelley.Spec.Ledger.BaseTypes
     invalidKey,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (addpair, haskey, range, removekey, (∉), (⋫))
+import Shelley.Spec.Ledger.Core
+  ( addpair,
+    dom,
+    haskey,
+    range,
+    removekey,
+    (∉),
+    (⋫),
+  )
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
@@ -59,6 +67,7 @@ import Shelley.Spec.Ledger.LedgerState
     DState,
     FutureGenDeleg (..),
     InstantaneousRewards (..),
+    emptyDState,
     _delegations,
     _fGenDelegs,
     _genDelegs,
@@ -66,16 +75,15 @@ import Shelley.Spec.Ledger.LedgerState
     _ptrs,
     _rewards,
     _stkCreds,
-    emptyDState,
   )
 import Shelley.Spec.Ledger.Slot
-  ( (*-),
-    (+*),
-    Duration (..),
+  ( Duration (..),
     EpochNo (..),
     SlotNo,
     epochInfoEpoch,
     epochInfoFirst,
+    (*-),
+    (+*),
   )
 import Shelley.Spec.Ledger.TxData
   ( DCert (..),
@@ -220,7 +228,7 @@ delegationTransition = do
   case c of
     DCertDeleg (RegKey hk) -> do
       -- note that pattern match is used instead of regCred, as in the spec
-      not (haskey hk (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk
+      hk ∉ dom (_stkCreds ds) ?! StakeKeyAlreadyRegisteredDELEG hk
 
       pure $
         ds

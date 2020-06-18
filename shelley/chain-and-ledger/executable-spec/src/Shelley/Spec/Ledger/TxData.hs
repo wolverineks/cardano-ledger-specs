@@ -121,7 +121,7 @@ import Shelley.Spec.Ledger.BaseTypes
     strictMaybeToMaybe,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (Relation (..))
+import Shelley.Spec.Ledger.Core (Relation (..), dom)
 import Shelley.Spec.Ledger.Credential
   ( Credential (..),
     Ix,
@@ -778,9 +778,9 @@ instance Relation (StakeCreds crypto) where
   type Domain (StakeCreds crypto) = Credential 'Staking crypto
   type Range (StakeCreds crypto) = SlotNo
 
-  singleton k v = StakeCreds $ Map.singleton k v
+  singleton_Relation k v = StakeCreds $ Map.singleton k v
 
-  dom (StakeCreds stkCreds) = dom stkCreds
+  dom_Relation (StakeCreds stkCreds) = dom stkCreds
 
   range (StakeCreds stkCreds) = range stkCreds
 
