@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Shelley.Spec.Ledger.Core
   ( Relation
@@ -96,13 +95,12 @@ class Relation m where
   haskey key m = key `elem` (dom m)
 
   -- | Insert (key,value) pair into the Relation.  Instances should overide this default with something more efficient
-  addpair :: (Ord(Domain m),Ord(Range m)) => Domain m -> Range m -> m -> m
+  addpair :: (Ord (Domain m), Ord (Range m)) => Domain m -> Range m -> m -> m
   addpair key val m = m ∪ (singleton key val)
 
   -- | Remove a key (and its associted value at that key) from the Relation. Instances should overide this default with something more efficient
-  removekey :: Ord(Domain m) => Domain m -> m -> m
+  removekey :: Ord (Domain m) => Domain m -> m -> m
   removekey k m = Set.singleton k ⋪ m
-
 
 -- | Alias for 'elem'.
 --
@@ -129,7 +127,7 @@ instance Relation (Map k v) where
 
   s ◁ r = Map.restrictKeys r s
 
-  s ⋪ r = Map.withoutKeys r s   -- Uses library fuction which is equivalent to: Map.filterWithKey (\k _ -> k `Set.notMember` s) r
+  s ⋪ r = Map.withoutKeys r s -- Uses library fuction which is equivalent to: Map.filterWithKey (\k _ -> k `Set.notMember` s) r
 
   r ▷ s = Map.filter (`Set.member` s) r
 
@@ -150,7 +148,6 @@ instance Relation (Map k v) where
 
   {-# INLINE removekey #-}
   removekey k m = Map.delete k m
-
 
 -- | Union override plus is (A\B)∪(B\A)∪{k|->v1+v2 | k|->v1 : A /\ k|->v2 : B}
 -- The library function Map.unionWith is more general, it allows any type for `b` as long as (+) :: b -> b -> b
@@ -184,7 +181,6 @@ instance Relation (Set (a, b)) where
   size = fromIntegral . Set.size
 
   addpair key val set = Set.insert (key, val) set
-
 
 -- The [(a,b)] instance is used in `stakeDistr` in the file LedgerState.hs
 instance Relation [(a, b)] where

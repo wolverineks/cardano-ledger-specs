@@ -6,47 +6,39 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-
 -- | This module is similar to ConcreteCryptoTypes, we made a changes to use a longer hash
 --   function than ShortHash for benchmarking.  We have replace ShortHash with Blake2b_256.
 -- It also includes a few versions of functions defined in Utils.hs, specialized to Benchmark Crypto
-
 module Test.Shelley.Spec.Ledger.BenchmarkCrypto where
 
-import Cardano.Crypto.DSIGN (MockDSIGN, VerKeyDSIGN, genKeyDSIGN, deriveVerKeyDSIGN)
-import Cardano.Crypto.Hash.Blake2b (Blake2b_256)
+import Cardano.Crypto.DSIGN (MockDSIGN, VerKeyDSIGN, deriveVerKeyDSIGN, genKeyDSIGN)
 import Cardano.Crypto.Hash (Hash (UnsafeHash), MD5, hash)
+import Cardano.Crypto.Hash.Blake2b (Blake2b_256)
 import Cardano.Crypto.KES (MockKES)
 import Cardano.Crypto.Seed (Seed, mkSeedFromBytes)
 import Cardano.Crypto.VRF (deriveVerKeyVRF, genKeyVRF)
-
+import Control.Monad.Trans.Reader (runReaderT)
 import Data.Coerce (coerce)
+import Data.Functor.Identity (runIdentity)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.Ratio (Ratio)
 import Data.Word (Word64)
-import Data.Functor.Identity (runIdentity)
-import Control.Monad.Trans.Reader (runReaderT)
-
 import Shelley.Spec.Ledger.Address (pattern Addr)
-import Shelley.Spec.Ledger.BaseTypes (UnitInterval, Network(..), mkUnitInterval, ShelleyBase)
+import qualified Shelley.Spec.Ledger.Address as TxData
+import Shelley.Spec.Ledger.BaseTypes (Network (..), ShelleyBase, UnitInterval, mkUnitInterval)
+import qualified Shelley.Spec.Ledger.BlockChain as BlockChain
 import Shelley.Spec.Ledger.Coin (Coin (..))
 import Shelley.Spec.Ledger.Credential (Credential (..), StakeReference (..))
-import Shelley.Spec.Ledger.Crypto
-import Shelley.Spec.Ledger.Keys (KeyRole (..), hashKey, vKey)
-import Shelley.Spec.Ledger.PParams
-import Shelley.Spec.Ledger.Slot(EpochNo(..))
-
-import Test.Shelley.Spec.Ledger.Utils(testGlobals)
-
-import qualified Shelley.Spec.Ledger.Address as TxData
-import qualified Shelley.Spec.Ledger.BlockChain as BlockChain
 import qualified Shelley.Spec.Ledger.Credential as TxData
+import Shelley.Spec.Ledger.Crypto
 import qualified Shelley.Spec.Ledger.Delegation.Certificates as Delegation.Certificates
 import qualified Shelley.Spec.Ledger.EpochBoundary as EpochBoundary
+import Shelley.Spec.Ledger.Keys (KeyRole (..), hashKey, vKey)
 import qualified Shelley.Spec.Ledger.Keys as Keys
 import qualified Shelley.Spec.Ledger.LedgerState as LedgerState
 import qualified Shelley.Spec.Ledger.OCert as OCert
+import Shelley.Spec.Ledger.PParams
 import qualified Shelley.Spec.Ledger.PParams as PParams
 import qualified Shelley.Spec.Ledger.Rewards as Rewards
 import qualified Shelley.Spec.Ledger.STS.Chain as STS.Chain
@@ -64,10 +56,12 @@ import qualified Shelley.Spec.Ledger.STS.Tick as STS.Tick
 import qualified Shelley.Spec.Ledger.STS.Utxo as STS.Utxo
 import qualified Shelley.Spec.Ledger.STS.Utxow as STS.Utxow
 import qualified Shelley.Spec.Ledger.Scripts as Scripts
+import Shelley.Spec.Ledger.Slot (EpochNo (..))
 import qualified Shelley.Spec.Ledger.Tx as Tx
 import qualified Shelley.Spec.Ledger.TxData as TxData
 import qualified Shelley.Spec.Ledger.UTxO as UTxO
 import Test.Cardano.Crypto.VRF.Fake (FakeVRF)
+import Test.Shelley.Spec.Ledger.Utils (testGlobals)
 
 data BenchmarkCrypto
 
@@ -302,7 +296,6 @@ mkKeyPair' seed = KeyPair vk sk
   where
     (sk, vk) = mkKeyPair seed
 
-
 mkAddr :: (KeyPair 'Payment, KeyPair 'Staking) -> Addr
 mkAddr (payKey, stakeKey) =
   Addr
@@ -323,7 +316,6 @@ mkVRFKeyPair seed =
 
 runShelleyBase :: ShelleyBase a -> a
 runShelleyBase act = runIdentity $ runReaderT act testGlobals
-
 
 ppsEx1 :: PParams
 ppsEx1 =

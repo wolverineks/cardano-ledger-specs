@@ -128,11 +128,11 @@ delegsTransition = do
           wdrls_ = unWdrl $ _wdrls (_body tx)
           rewards = _rewards ds
 
-      Map.isSubmapOfBy (==) wdrls_  rewards   -- wdrls_ ⊆ rewards
+      Map.isSubmapOfBy (==) wdrls_ rewards -- wdrls_ ⊆ rewards
         ?! WithdrawalsNotInRewardsDELEGS
           (Map.differenceWith (\x y -> if x /= y then Just x else Nothing) wdrls_ rewards)
 
-      let rewards' = rewards ⨃ ( fmap (\ _x -> 0) wdrls_ )
+      let rewards' = rewards ⨃ (fmap (\_x -> 0) wdrls_)
 
       pure $ dpstate {_dstate = ds {_rewards = rewards'}}
     gamma :|> c -> do
@@ -143,9 +143,9 @@ delegsTransition = do
             DCertDeleg (Delegate deleg) ->
               let StakePools stPools_ = _stPools $ _pstate dpstate'
                   targetPool = _delegatee deleg
-               in case Map.lookup targetPool stPools_  of
-                    Just _ -> Right()
-                    Nothing ->  Left $ DelegateeNotRegisteredDELEG targetPool
+               in case Map.lookup targetPool stPools_ of
+                    Just _ -> Right ()
+                    Nothing -> Left $ DelegateeNotRegisteredDELEG targetPool
             _ -> Right ()
       isDelegationRegistered ?!: id
 

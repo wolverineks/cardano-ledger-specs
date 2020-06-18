@@ -288,6 +288,7 @@ data DState crypto = DState
   deriving (Show, Eq, Generic)
 
 instance NoUnexpectedThunks (DState crypto)
+
 instance NFData (DState crypto)
 
 instance Crypto crypto => ToCBOR (DState crypto) where
@@ -798,41 +799,41 @@ witsVKeyNeeded ::
   GenDelegs crypto ->
   WitHashes crypto
 witsVKeyNeeded utxo' tx@(Tx txbody _ _) genDelegs =
-     WitHashes
-        { addrWitHashes = fst certAuthors `Set.union` inputAuthors `Set.union` owners `Set.union` wdrlAuthors,
-          regWitHashes = snd certAuthors `Set.union` updateKeys
-        }
-   where
+  WitHashes
+    { addrWitHashes = fst certAuthors `Set.union` inputAuthors `Set.union` owners `Set.union` wdrlAuthors,
+      regWitHashes = snd certAuthors `Set.union` updateKeys
+    }
+  where
     inputAuthors :: Set (KeyHash 'AWitness crypto)
     inputAuthors = foldr accum Set.empty (_inputs txbody)
-        where accum txin ans =
-                 case txinLookup txin utxo' of
-                    Just (TxOut (Addr _ (KeyHashObj pay) _) _) -> Set.insert (asWitness pay) ans
-                    Just (TxOut (AddrBootstrap bootAddr) _) -> Set.insert (asWitness (bootstrapKeyHash bootAddr)) ans
-                    _other -> ans
-
+      where
+        accum txin ans =
+          case txinLookup txin utxo' of
+            Just (TxOut (Addr _ (KeyHashObj pay) _) _) -> Set.insert (asWitness pay) ans
+            Just (TxOut (AddrBootstrap bootAddr) _) -> Set.insert (asWitness (bootstrapKeyHash bootAddr)) ans
+            _other -> ans
     wdrlAuthors :: Set (KeyHash 'AWitness crypto)
     wdrlAuthors = Map.foldrWithKey accum Set.empty (unWdrl (_wdrls txbody))
-       where accum key _ ans = Set.union (extractKeyHashWitnessSet [getRwdCred key]) ans
-
+      where
+        accum key _ ans = Set.union (extractKeyHashWitnessSet [getRwdCred key]) ans
     owners :: Set (KeyHash 'AWitness crypto)
     owners = foldr accum Set.empty (_certs txbody)
-       where accum (DCertPool (RegPool pool)) ans = Set.union (Set.map asWitness (_poolOwners pool)) ans
-             accum _cert ans = ans
-
-    cwitness (DCertDeleg dc)   = (extractKeyHashWitnessSet [delegCWitness dc], Set.empty)
-    cwitness (DCertPool pc)    = (Set.empty, extractKeyHashWitnessSet [poolCWitness pc])
-    cwitness (DCertGenesis gc) = (Set.empty, Set.singleton(asWitness $ genesisCWitness gc))
+      where
+        accum (DCertPool (RegPool pool)) ans = Set.union (Set.map asWitness (_poolOwners pool)) ans
+        accum _cert ans = ans
+    cwitness (DCertDeleg dc) = (extractKeyHashWitnessSet [delegCWitness dc], Set.empty)
+    cwitness (DCertPool pc) = (Set.empty, extractKeyHashWitnessSet [poolCWitness pc])
+    cwitness (DCertGenesis gc) = (Set.empty, Set.singleton (asWitness $ genesisCWitness gc))
     cwitness c = error $ show c ++ " does not have a witness"
-               -- key reg requires no witness but this is already filtered outby requiresVKeyWitness
-               -- before the call to `cwitness`, so this error should never be reached.
+    -- key reg requires no witness but this is already filtered outby requiresVKeyWitness
+    -- before the call to `cwitness`, so this error should never be reached.
 
-    certAuthors :: (Set (KeyHash 'AWitness crypto),Set (KeyHash 'RWitness crypto))
-    certAuthors = foldr accum (Set.empty,Set.empty) (_certs txbody)
-       where accum cert ans | requiresVKeyWitness cert = unionPair (cwitness cert) ans
-             accum _cert ans = ans
-             unionPair (x,y) (a,b) = (Set.union x a, Set.union y b)
-
+    certAuthors :: (Set (KeyHash 'AWitness crypto), Set (KeyHash 'RWitness crypto))
+    certAuthors = foldr accum (Set.empty, Set.empty) (_certs txbody)
+      where
+        accum cert ans | requiresVKeyWitness cert = unionPair (cwitness cert) ans
+        accum _cert ans = ans
+        unionPair (x, y) (a, b) = (Set.union x a, Set.union y b)
     updateKeys :: Set (KeyHash 'RWitness crypto)
     updateKeys = asWitness `Set.map` propWits (txup tx) genDelegs
 

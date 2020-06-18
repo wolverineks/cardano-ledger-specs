@@ -120,14 +120,13 @@ instance Relation (UTxO crypto) where
   size (UTxO utxo) = size utxo
 
   {-# INLINE haskey #-}
-  haskey k (UTxO x) = case Map.lookup k x of {Just _ -> True; Nothing -> False}
+  haskey k (UTxO x) = case Map.lookup k x of Just _ -> True; Nothing -> False
 
   {-# INLINE addpair #-}
-  addpair k v (UTxO x) = UTxO(Map.insertWith (\  y _z -> y) k v x)
+  addpair k v (UTxO x) = UTxO (Map.insertWith (\y _z -> y) k v x)
 
   {-# INLINE removekey #-}
-  removekey k (UTxO m) =UTxO (Map.delete k m)
-
+  removekey k (UTxO m) = UTxO (Map.delete k m)
 
 -- | Compute the hash of a transaction body.
 hashTxBody ::
@@ -284,9 +283,10 @@ txinsScript ::
   Set (TxIn crypto) ->
   UTxO crypto ->
   Set (TxIn crypto)
-txinsScript txInps (UTxO u) = foldr add Set.empty txInps where
-   -- to get subset, start with empty, and only insert those inputs in txInps that are locked in u
-   add input ans = case Map.lookup input u of
-                     Just (TxOut (Addr _ (ScriptHashObj _) _) _) -> Set.insert input ans
-                     Just _ -> ans
-                     Nothing -> ans
+txinsScript txInps (UTxO u) = foldr add Set.empty txInps
+  where
+    -- to get subset, start with empty, and only insert those inputs in txInps that are locked in u
+    add input ans = case Map.lookup input u of
+      Just (TxOut (Addr _ (ScriptHashObj _) _) _) -> Set.insert input ans
+      Just _ -> ans
+      Nothing -> ans

@@ -43,7 +43,7 @@ import Shelley.Spec.Ledger.BaseTypes
     invalidKey,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (range, (∉), (⋫), haskey, addpair, removekey )
+import Shelley.Spec.Ledger.Core (addpair, haskey, range, removekey, (∉), (⋫))
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
@@ -220,13 +220,13 @@ delegationTransition = do
   case c of
     DCertDeleg (RegKey hk) -> do
       -- note that pattern match is used instead of regCred, as in the spec
-      not(haskey hk (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk
+      not (haskey hk (_stkCreds ds)) ?! StakeKeyAlreadyRegisteredDELEG hk
 
       pure $
         ds
-          { _stkCreds = addpair hk slot (_stkCreds ds),                          -- _stkCreds ds ∪ (singleton hk slot)
-            _rewards = addpair  (RewardAcnt network hk) (Coin 0) (_rewards ds),  -- _rewards ds ∪ (singleton (RewardAcnt network hk) (Coin 0) )
-            _ptrs = addpair ptr hk (_ptrs ds)                                    -- _ptrs ds ∪ (singleton ptr hk)
+          { _stkCreds = addpair hk slot (_stkCreds ds), -- _stkCreds ds ∪ (singleton hk slot)
+            _rewards = addpair (RewardAcnt network hk) (Coin 0) (_rewards ds), -- _rewards ds ∪ (singleton (RewardAcnt network hk) (Coin 0) )
+            _ptrs = addpair ptr hk (_ptrs ds) -- _ptrs ds ∪ (singleton ptr hk)
           }
     DCertDeleg (DeRegKey hk) -> do
       -- note that pattern match is used instead of cwitness, as in the spec
@@ -241,7 +241,7 @@ delegationTransition = do
             _rewards = removekey (RewardAcnt network hk) (_rewards ds),
             _delegations = removekey hk (_delegations ds),
             _ptrs = _ptrs ds ⋫ Set.singleton hk
-            -- ^ TODO make _ptrs a bijection. This operation takes time proportional to (_ptrs ds)
+            -- TODO make _ptrs a bijection. This operation takes time proportional to (_ptrs ds)
             -- OR turn _stkCreds into a mapping of stake credentials to pointers
             -- note that the slot values in _stkCreds is no longer needed (no decay)
             -- then we could use (lookup hk (_delecations ds)) to get ptr, then use domain removal on (_ptrs ds) rather than range removal
@@ -261,7 +261,7 @@ delegationTransition = do
           (GenDelegs genDelegs) = _genDelegs ds
 
       -- gkh ∈ dom genDelegs ?! GenesisKeyNotInpMappingDELEG gkh
-      (case Map.lookup gkh genDelegs of { Just _ -> True; Nothing -> False}) ?! GenesisKeyNotInpMappingDELEG gkh
+      (case Map.lookup gkh genDelegs of Just _ -> True; Nothing -> False) ?! GenesisKeyNotInpMappingDELEG gkh
 
       let currentOtherDelegations =
             range $

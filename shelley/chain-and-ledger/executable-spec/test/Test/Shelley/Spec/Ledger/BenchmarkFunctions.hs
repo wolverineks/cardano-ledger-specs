@@ -1,11 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
-module Test.Shelley.Spec.Ledger.BenchmarkFunctions
+module Test.Shelley.Spec.Ledger.BenchmarkFunctions where
+
 {-
   ( ledgerSpendOneUTxO,
     ledgerSpendOneGivenUTxO,
@@ -25,7 +26,6 @@ module Test.Shelley.Spec.Ledger.BenchmarkFunctions
     ledgerStateWithNkeysMpools, -- How to precompute env for the Stake Delegation transactions
   )
   -}
-where
 
 import Control.State.Transition.Extended (TRC (..), applySTS)
 import qualified Data.Map as Map
@@ -34,9 +34,10 @@ import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import Data.Word (Word64)
 import Numeric.Natural (Natural)
-import Shelley.Spec.Ledger.BaseTypes (
-  Network (..),
-  StrictMaybe (..))
+import Shelley.Spec.Ledger.BaseTypes
+  ( Network (..),
+    StrictMaybe (..),
+  )
 import Shelley.Spec.Ledger.Coin (Coin (..))
 import Shelley.Spec.Ledger.Credential (pattern KeyHashObj)
 import Shelley.Spec.Ledger.Delegation.Certificates
@@ -62,51 +63,52 @@ import Shelley.Spec.Ledger.STS.Ledger (pattern LedgerEnv)
 import Shelley.Spec.Ledger.Slot (EpochNo (..), SlotNo (..))
 import Shelley.Spec.Ledger.Tx (WitnessSetHKD (..), pattern Tx)
 import Shelley.Spec.Ledger.TxData
-  ( pattern DCertDeleg,
+  ( Delegation (..),
+    PoolCert (..),
+    _poolCost,
+    _poolMD,
+    _poolMargin,
+    _poolOwners,
+    _poolPledge,
+    _poolPubKey,
+    _poolRAcnt,
+    _poolRelays,
+    _poolVrf,
+    pattern DCertDeleg,
+    pattern DCertPool,
+    pattern PoolParams,
+    pattern RewardAcnt,
     pattern TxBody,
     pattern TxIn,
     pattern TxOut,
     pattern Wdrl,
-    pattern PoolParams,
-    pattern RewardAcnt,
-    _poolPubKey,
-    _poolVrf,
-    _poolPledge,
-    _poolCost,
-    _poolMargin,
-    _poolRAcnt,
-    _poolOwners,
-    _poolRelays,
-    _poolMD,
-    pattern DCertPool,
-    PoolCert(..),
-    Delegation(..),
   )
 import Shelley.Spec.Ledger.UTxO (hashTxBody, makeWitnessesVKey)
-import Test.Shelley.Spec.Ledger.BenchmarkCrypto  -- Types with fixed type parameter: BenchmarkCrypto
-  ( DCert,
+import Test.Shelley.Spec.Ledger.BenchmarkCrypto -- Types with fixed type parameter: BenchmarkCrypto
+  ( -- Below this line are operations to make things with BenchmarkCrypto fixed types.
+    Addr,
+    Credential,
+    DCert,
     DPState,
+    KeyHash,
     KeyPair,
     LEDGER,
     LedgerEnv,
+    PoolParams,
     Tx,
     TxBody,
     TxOut,
     UTxOState,
     VRFKeyHash,
-    PoolParams,
     hashKeyVRF,
-    Credential,
-    KeyHash,
-    pattern KeyPair,  -- Below this line are operations to make things with BenchmarkCrypto fixed types.
-    Addr,
-    mkKeyPair,
     mkAddr,
+    mkKeyPair,
     mkKeyPair',
+    mkVRFKeyPair,
+    ppsEx1,
     runShelleyBase,
     unsafeMkUnitInterval,
-    mkVRFKeyPair,
-    ppsEx1
+    pattern KeyPair,
   )
 
 -- =========================================================
@@ -190,8 +192,7 @@ txSpendOneUTxO =
 ledgerSpendOneUTxO :: Integer -> ()
 ledgerSpendOneUTxO n = testLEDGER (initUTxO n, emptyDPState) txSpendOneUTxO ledgerEnv
 
-
-ledgerSpendOneGivenUTxO ::  UTxOState -> ()
+ledgerSpendOneGivenUTxO :: UTxOState -> ()
 ledgerSpendOneGivenUTxO state = testLEDGER (state, emptyDPState) txSpendOneUTxO ledgerEnv
 
 -- ===========================================================================
@@ -211,7 +212,7 @@ stakeKeyToCred :: KeyPair 'Staking -> Credential 'Staking
 stakeKeyToCred = KeyHashObj . hashKey . vKey
 
 firstStakeKeyCred :: Credential 'Staking
-firstStakeKeyCred =  stakeKeyToCred stakeKeyOne
+firstStakeKeyCred = stakeKeyToCred stakeKeyOne
 
 -- Create stake key registration certificates
 stakeKeyRegistrations :: [KeyPair 'Staking] -> StrictSeq DCert
@@ -233,18 +234,18 @@ txbFromCerts ix regCerts =
     SNothing
     SNothing
 
-
-makeSimpleTx
-  :: TxBody
-  -> [KeyPair 'AWitness]
-  -> [KeyPair 'RWitness]
-  -> Tx
+makeSimpleTx ::
+  TxBody ->
+  [KeyPair 'AWitness] ->
+  [KeyPair 'RWitness] ->
+  Tx
 makeSimpleTx body keysAddr keysReg =
   Tx
     body
-    mempty { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr
-           , regWits = makeWitnessesVKey (hashTxBody body) keysReg
-           }
+    mempty
+      { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr,
+        regWits = makeWitnessesVKey (hashTxBody body) keysReg
+      }
     SNothing
 
 -- Create a transaction that registers stake credentials.
@@ -261,10 +262,9 @@ initLedgerState n = (initUTxO n, emptyDPState)
 makeLEDGERState :: (UTxOState, DPState) -> Tx -> (UTxOState, DPState)
 makeLEDGERState start tx =
   let st = applySTS @LEDGER (TRC (ledgerEnv, start, tx))
-  in
-  case runShelleyBase st of
-    Right st' -> st'
-    Left e -> error $ show e
+   in case runShelleyBase st of
+        Right st' -> st'
+        Left e -> error $ show e
 
 -- Create a ledger state that has registered stake credentials that
 -- are seeded with (n, 0, 0, 0, 0) to (m, 0, 0, 0, 0).
@@ -272,7 +272,6 @@ makeLEDGERState start tx =
 ledgerStateWithNregisteredKeys :: Word64 -> Word64 -> (UTxOState, DPState)
 ledgerStateWithNregisteredKeys n m =
   makeLEDGERState (initLedgerState 1) $ txRegStakeKeys 0 (stakeKeys n m)
-
 
 -- ===========================================================
 -- Stake Key Registration example
@@ -298,8 +297,9 @@ txbDeRegStakeKey x y =
   TxBody
     (Set.fromList [TxIn genesisId 1])
     (StrictSeq.fromList [TxOut aliceAddr (Coin 100)])
-    (StrictSeq.fromList $
-      fmap (DCertDeleg . DeRegKey . stakeKeyToCred) (stakeKeys x y))
+    ( StrictSeq.fromList $
+        fmap (DCertDeleg . DeRegKey . stakeKeyToCred) (stakeKeys x y)
+    )
     (Wdrl Map.empty)
     (Coin 0)
     (SlotNo 10)
@@ -319,7 +319,7 @@ txDeRegStakeKeys x y =
 -- so that keys (n, 0, 0, 0, 0) through (m, 0, 0, 0, 0) are already registered,
 -- deregister keys (x, 0, 0, 0, 0) through (y, 0, 0, 0, 0).
 -- Note that [x, y] must be contained in [n, m].
-ledgerDeRegisterStakeKeys :: Word64 -> Word64 -> (UTxOState, DPState)  -> ()
+ledgerDeRegisterStakeKeys :: Word64 -> Word64 -> (UTxOState, DPState) -> ()
 ledgerDeRegisterStakeKeys x y state =
   testLEDGER
     state
@@ -337,8 +337,9 @@ txbWithdrawals x y =
     (Set.fromList [TxIn genesisId 1])
     (StrictSeq.fromList [TxOut aliceAddr (Coin 100)])
     StrictSeq.empty
-    (Wdrl $ Map.fromList $
-             fmap (\ks -> (RewardAcnt Testnet (stakeKeyToCred ks), Coin 0)) (stakeKeys x y))
+    ( Wdrl $ Map.fromList $
+        fmap (\ks -> (RewardAcnt Testnet (stakeKeyToCred ks), Coin 0)) (stakeKeys x y)
+    )
     (Coin 0)
     (SlotNo 10)
     SNothing
@@ -357,15 +358,13 @@ txWithdrawals x y =
 -- so that keys (n, 0, 0, 0, 0) through (m, 0, 0, 0, 0) are already registered,
 -- make reward withdrawls for keys (x, 0, 0, 0, 0) through (y, 0, 0, 0, 0).
 -- Note that [x, y] must be contained in [n, m].
-ledgerRewardWithdrawals :: Word64 -> Word64 -> (UTxOState, DPState)  -> ()
+ledgerRewardWithdrawals :: Word64 -> Word64 -> (UTxOState, DPState) -> ()
 ledgerRewardWithdrawals x y state = testLEDGER state (txWithdrawals x y) ledgerEnv
-
 
 -- ===========================================================================
 --
 -- Register a stake pool when there are a lot of registered stake pool
 --
-
 
 -- Create stake pool key pairs, corresponding to seeds
 -- (start, 0, 0, 0, 0) through (end, 0, 0, 0, 0)
@@ -445,7 +444,6 @@ ledgerReRegisterStakePools x y state =
     (txRegStakePools 1 (poolColdKeys x y))
     ledgerEnv
 
-
 -- ===========================================================
 -- Stake Pool Retirement example
 
@@ -456,10 +454,10 @@ txbRetireStakePool x y =
   TxBody
     (Set.fromList [TxIn genesisId 1])
     (StrictSeq.fromList [TxOut aliceAddr (Coin 100)])
-    (StrictSeq.fromList $
-      fmap
-        (\ks -> DCertPool $ RetirePool (mkPoolKeyHash ks) (EpochNo 1))
-        (poolColdKeys x y)
+    ( StrictSeq.fromList $
+        fmap
+          (\ks -> DCertPool $ RetirePool (mkPoolKeyHash ks) (EpochNo 1))
+          (poolColdKeys x y)
     )
     (Wdrl Map.empty)
     (Coin 0)
@@ -483,12 +481,10 @@ txRetireStakePool x y =
 ledgerRetireStakePools :: Word64 -> Word64 -> (UTxOState, DPState) -> ()
 ledgerRetireStakePools x y state = testLEDGER state (txRetireStakePool x y) ledgerEnv
 
-
 -- ===========================================================================
 --
 -- Delegate Stake Credentials when many stake keys and stake pools are registered.
 --
-
 
 -- Create a ledger state that has n registered stake keys and m stake pools.
 -- The stake keys are seeded with (1, 0, 0, 0, 0) to (n, 0, 0, 0, 0)

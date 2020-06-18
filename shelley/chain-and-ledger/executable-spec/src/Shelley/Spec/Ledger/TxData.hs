@@ -84,7 +84,7 @@ import Cardano.Binary
 import Cardano.Prelude
   ( AllowThunksIn (..),
     LByteString,
-    NFData(),
+    NFData (),
     NoUnexpectedThunks (..),
     Word64,
     catMaybes,
@@ -799,10 +799,10 @@ instance Relation (StakeCreds crypto) where
   size (StakeCreds stkCreds) = size stkCreds
 
   {-# INLINE addpair #-}
-  addpair k v (StakeCreds x) = StakeCreds(Map.insertWith (\  y _z -> y) k v x)
+  addpair k v (StakeCreds x) = StakeCreds (Map.insertWith (\y _z -> y) k v x)
 
   {-# INLINE haskey #-}
-  haskey k (StakeCreds x) = case Map.lookup k x of {Just _ -> True; Nothing -> False}  -- haskey k x
+  haskey k (StakeCreds x) = case Map.lookup k x of Just _ -> True; Nothing -> False -- haskey k x
 
   {-# INLINE removekey #-}
   removekey k (StakeCreds m) = StakeCreds (Map.delete k m)
