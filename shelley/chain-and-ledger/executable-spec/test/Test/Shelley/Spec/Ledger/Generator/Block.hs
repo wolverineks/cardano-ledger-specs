@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -9,6 +10,7 @@ module Test.Shelley.Spec.Ledger.Generator.Block
   )
 where
 
+import Cardano.Crypto.Hash (HashAlgorithm)
 import Cardano.Slotting.Slot (WithOrigin (..))
 import Control.State.Transition.Extended (TRC (..), applySTS)
 import Control.State.Transition.Trace.Generator.QuickCheck (sigGen)
@@ -29,7 +31,7 @@ import Shelley.Spec.Ledger.BaseTypes
 import Shelley.Spec.Ledger.BlockChain (LastAppliedBlock (..))
 import Shelley.Spec.Ledger.Core (dom, range)
 import Shelley.Spec.Ledger.Delegation.Certificates (PoolDistr (..))
-import Shelley.Spec.Ledger.Keys (GenDelegs (..), KeyRole (..), coerceKeyRole, hashKey, vKey)
+import Shelley.Spec.Ledger.Keys (GenDelegs (..), KeyRole (..), coerceKeyRole, genDelegKeyHash, hashKey, vKey)
 import Shelley.Spec.Ledger.LedgerState
   ( _delegationState,
     _dstate,
@@ -65,11 +67,12 @@ import qualified Test.QuickCheck as QC (choose, discard, shuffle)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
   ( Block,
     ChainState,
+    GenDelegPair,
     KeyHash,
     LEDGERS,
     OBftSlot,
     TICK,
-    VRFKeyHash,
+    pattern GenDelegPair,
   )
 import Test.Shelley.Spec.Ledger.Generator.Core
   ( AllIssuerKeys (..),
@@ -91,10 +94,10 @@ import Test.Shelley.Spec.Ledger.Utils
   )
 
 nextCoreNode ::
-  Map SlotNo OBftSlot ->
-  Map SlotNo OBftSlot ->
+  Map SlotNo (OBftSlot h) ->
+  Map SlotNo (OBftSlot h) ->
   SlotNo ->
-  (SlotNo, KeyHash 'Genesis)
+  (SlotNo, KeyHash h 'Genesis)
 nextCoreNode os nextOs s =
   let getNextOSlot os' =
         let (_, nextSlots) = Map.split s os'
@@ -111,17 +114,19 @@ nextCoreNode os nextOs s =
 getPraosSlot ::
   SlotNo ->
   SlotNo ->
-  Map SlotNo OBftSlot ->
-  Map SlotNo OBftSlot ->
+  Map SlotNo (OBftSlot h) ->
+  Map SlotNo (OBftSlot h) ->
   Maybe SlotNo
 getPraosSlot start tooFar os nos =
   let schedules = os `Map.union` nos
    in List.find (not . (`Map.member` schedules)) [start .. tooFar -1]
 
 genBlock ::
-  GenEnv ->
-  ChainState ->
-  Gen Block
+  forall h.
+  HashAlgorithm h =>
+  GenEnv h ->
+  ChainState h ->
+  Gen (Block h)
 genBlock
   ge@(GenEnv KeySpace_ {ksCoreNodes, ksStakePools, ksGenesisDelegates} _)
   chainSt = do
@@ -187,7 +192,7 @@ genBlock
 
     -- ran genDelegs
     let nes = chainNes chainSt
-        nes' = runShelleyBase $ applySTS @TICK $ TRC (TickEnv (getGKeys nes), nes, nextSlot)
+        nes' = runShelleyBase $ applySTS @(TICK h) $ TRC (TickEnv (getGKeys nes), nes, nextSlot)
 
     case nes' of
       Left _ -> QC.discard
@@ -196,14 +201,14 @@ genBlock
             EpochState acnt _ ls _ pp' _ = es
             GenDelegs gds = _genDelegs . _dstate . _delegationState . esLState . nesEs $ _nes'
             -- Keys need to be coerced to block issuer keys
-            keys :: AllIssuerKeys 'BlockIssuer
+            keys :: AllIssuerKeys h 'BlockIssuer
             keys = case ks of
               -- We chose an overlay slot, and need to lookup the given
               -- keys from the genesis key hash.
               Left ghk -> coerce gkeys ghk gds
               -- We chose a Praos slot, and have everything we need.
               Right ks' -> coerce ks'
-            genesisVKHs = Set.map fst $ range gds
+            genesisVKHs = Set.map genDelegKeyHash $ range gds
             n' =
               currentIssueNo
                 (OCertEnv (dom poolParams) genesisVKHs)
@@ -244,14 +249,14 @@ genBlock
         Nothing -> error "couldn't find corresponding core node key"
         Just k -> snd k
       gkeys ::
-        KeyHash 'Genesis ->
-        Map (KeyHash 'Genesis) (KeyHash 'GenesisDelegate, VRFKeyHash) ->
-        AllIssuerKeys 'GenesisDelegate
+        KeyHash h 'Genesis ->
+        Map (KeyHash h 'Genesis) (GenDelegPair h) ->
+        AllIssuerKeys h 'GenesisDelegate
       gkeys gkey gds =
         case Map.lookup gkey gds of
           Nothing ->
             error "genBlock: CorruptGenenisDelegation"
-          Just (ckh, _) ->
+          Just (GenDelegPair ckh _) ->
             -- if GenesisDelegate certs changed a delegation to a new key
             fromMaybe (origIssuerKeys gkey) $
               List.find (\x -> hk x == ckh) ksGenesisDelegates
@@ -284,4 +289,4 @@ genBlock
       genTxs pp reserves ls s = do
         let ledgerEnv = LedgersEnv s pp reserves
 
-        sigGen @LEDGERS ge ledgerEnv ls
+        sigGen @(LEDGERS h) ge ledgerEnv ls

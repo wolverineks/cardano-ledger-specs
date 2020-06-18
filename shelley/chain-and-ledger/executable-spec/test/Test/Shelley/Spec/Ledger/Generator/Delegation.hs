@@ -16,6 +16,7 @@ module Test.Shelley.Spec.Ledger.Generator.Delegation
   )
 where
 
+import Cardano.Crypto.Hash (HashAlgorithm)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map (elems, findWithDefault, fromList, keys, lookup, size)
 import Data.Maybe (fromMaybe)
@@ -46,7 +47,8 @@ import Shelley.Spec.Ledger.Delegation.Certificates
     pattern StakeCreds,
   )
 import Shelley.Spec.Ledger.Keys
-  ( GenDelegs (..),
+  ( GenDelegPair (..),
+    GenDelegs (..),
     KeyRole (..),
     coerceKeyRole,
     hashKey,
@@ -107,12 +109,12 @@ import Test.Shelley.Spec.Ledger.Generator.Core
   )
 import Test.Shelley.Spec.Ledger.Utils
 
-data CertCred
-  = CoreKeyCred [GenesisKeyPair]
-  | StakeCred (KeyPair 'Staking)
-  | PoolCred (KeyPair 'StakePool)
-  | ScriptCred (MultiSig, MultiSig)
-  | DelegateCred [KeyPair 'GenesisDelegate]
+data CertCred h
+  = CoreKeyCred [GenesisKeyPair h]
+  | StakeCred (KeyPair h 'Staking)
+  | PoolCred (KeyPair h 'StakePool)
+  | ScriptCred (MultiSig h, MultiSig h)
+  | DelegateCred [KeyPair h 'GenesisDelegate]
   | NoCred
   deriving (Show)
 
@@ -127,14 +129,14 @@ data CertCred
 -- Note: we register keys and pools more often than deregistering/retiring them,
 -- and we generate more delegations than registrations of keys/pools.
 genDCert ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   Constants ->
-  KeySpace ->
+  KeySpace h ->
   PParams ->
   AccountState ->
-  DPState ->
+  DPState h ->
   SlotNo ->
-  Gen (Maybe (DCert, CertCred))
+  Gen (Maybe (DCert h, CertCred h))
 genDCert
   c@( Constants
         { frequencyRegKeyCert,
@@ -181,12 +183,12 @@ genDCert
 
 -- | Generate a RegKey certificate
 genRegKeyCert ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   Constants ->
-  KeyPairs ->
-  MultiSigPairs ->
-  DState ->
-  Gen (Maybe (DCert, CertCred))
+  KeyPairs h ->
+  MultiSigPairs h ->
+  DState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genRegKeyCert
   Constants {frequencyKeyCredReg, frequencyScriptCredReg}
   keys
@@ -224,12 +226,12 @@ genRegKeyCert
 -- | Generate a DeRegKey certificate along with the staking credential, which is
 -- needed to witness the certificate.
 genDeRegKeyCert ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   Constants ->
-  KeyPairs ->
-  MultiSigPairs ->
-  DState ->
-  Gen (Maybe (DCert, CertCred))
+  KeyPairs h ->
+  MultiSigPairs h ->
+  DState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genDeRegKeyCert Constants {frequencyKeyCredDeReg, frequencyScriptCredDeReg} keys scripts dState =
   QC.frequency
     [ ( frequencyKeyCredDeReg,
@@ -277,12 +279,12 @@ genDeRegKeyCert Constants {frequencyKeyCredDeReg, frequencyScriptCredDeReg} keys
 -- Returns nothing if there are no registered staking credentials or no
 -- registered pools.
 genDelegation ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   Constants ->
-  KeyPairs ->
-  MultiSigPairs ->
-  DPState ->
-  Gen (Maybe (DCert, CertCred))
+  KeyPairs h ->
+  MultiSigPairs h ->
+  DPState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genDelegation
   Constants {frequencyKeyCredDelegation, frequencyScriptCredDelegation}
   keys
@@ -324,11 +326,11 @@ genDelegation
       availablePools = Set.toList $ dom registeredPools
 
 genGenesisDelegation ::
-  HasCallStack =>
-  [AllIssuerKeys 'GenesisDelegate] ->
-  [GenesisKeyPair] ->
-  DPState ->
-  Gen (Maybe (DCert, CertCred))
+  (HasCallStack, HashAlgorithm h) =>
+  [AllIssuerKeys h 'GenesisDelegate] ->
+  [GenesisKeyPair h] ->
+  DPState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genGenesisDelegation keys coreKeys dpState =
   if null genesisDelegators || null availableDelegatees
     then pure Nothing
@@ -353,19 +355,19 @@ genGenesisDelegation keys coreKeys dpState =
     (GenDelegs genDelegs_) = _genDelegs $ _dstate dpState
     genesisDelegator k = k ∈ dom genDelegs_
     genesisDelegators = filter (genesisDelegator . hashVKey) coreKeys
-    notActiveDelegatee k = coerceKeyRole k ∉ fmap fst (Map.elems genDelegs_)
+    notActiveDelegatee k = coerceKeyRole k ∉ fmap genDelegKeyHash (Map.elems genDelegs_)
     fGenDelegs = _fGenDelegs $ _dstate dpState
-    notFutureDelegatee k = coerceKeyRole k ∉ fmap fst (Map.elems fGenDelegs)
+    notFutureDelegatee k = coerceKeyRole k ∉ fmap genDelegKeyHash (Map.elems fGenDelegs)
     notDelegatee k = notActiveDelegatee k && notFutureDelegatee k
     availableDelegatees = filter (notDelegatee . hashVKey . cold) keys
 
 -- | Generate and return a RegPool certificate along with its witnessing key.
 genRegPool ::
-  HasCallStack =>
-  [AllIssuerKeys 'StakePool] ->
-  KeyPairs ->
-  DPState ->
-  Gen (Maybe (DCert, CertCred))
+  (HasCallStack, HashAlgorithm h) =>
+  [AllIssuerKeys h 'StakePool] ->
+  KeyPairs h ->
+  DPState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genRegPool poolKeys keyPairs dpState =
   if null availableKeys
     then pure Nothing
@@ -376,12 +378,12 @@ genRegPool poolKeys keyPairs dpState =
 
 -- | Generate PoolParams and the key witness.
 genStakePool ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   -- | Available keys for stake pool registration
-  [AllIssuerKeys 'StakePool] ->
+  [AllIssuerKeys h 'StakePool] ->
   -- | KeyPairs containing staking keys to act as owners/reward account
-  KeyPairs ->
-  Gen (PoolParams, KeyPair 'StakePool)
+  KeyPairs h ->
+  Gen (PoolParams h, KeyPair h 'StakePool)
 genStakePool poolKeys skeys =
   mkPoolParams
     <$> (QC.elements poolKeys)
@@ -395,7 +397,7 @@ genStakePool poolKeys skeys =
     <*> (fromInteger <$> QC.choose (0, 100) :: Gen Natural)
     <*> (getAnyStakeKey skeys)
   where
-    getAnyStakeKey :: KeyPairs -> Gen (VKey 'Staking)
+    getAnyStakeKey :: KeyPairs h -> Gen (VKey h 'Staking)
     getAnyStakeKey keys = vKey . snd <$> QC.elements keys
     mkPoolParams allPoolKeys pledge cost marginPercent acntKey =
       let interval = unsafeMkUnitInterval $ fromIntegral marginPercent % 100
@@ -414,10 +416,10 @@ genStakePool poolKeys skeys =
 
 -- | Generate `RegPool` and the key witness.
 genDCertRegPool ::
-  HasCallStack =>
-  [AllIssuerKeys 'StakePool] ->
-  KeyPairs ->
-  Gen (DCert, CertCred)
+  (HasCallStack, HashAlgorithm h) =>
+  [AllIssuerKeys h 'StakePool] ->
+  KeyPairs h ->
+  Gen (DCert h, CertCred h)
 genDCertRegPool poolKeys keyPairs = do
   (pps, poolKey) <- genStakePool poolKeys keyPairs
   pure (DCertPool (RegPool pps), PoolCred poolKey)
@@ -432,10 +434,10 @@ genDCertRegPool poolKeys keyPairs = do
 genRetirePool ::
   HasCallStack =>
   Constants ->
-  [AllIssuerKeys 'StakePool] ->
-  PState ->
+  [AllIssuerKeys h 'StakePool] ->
+  PState h ->
   SlotNo ->
-  Gen (Maybe (DCert, CertCred))
+  Gen (Maybe (DCert h, CertCred h))
 genRetirePool Constants {frequencyLowMaxEpoch} poolKeys pState slot =
   if (null retireable)
     then pure Nothing
@@ -467,14 +469,14 @@ genRetirePool Constants {frequencyLowMaxEpoch} poolKeys pState slot =
 
 -- | Generate an InstantaneousRewards Transfer certificate
 genInstantaneousRewards ::
-  HasCallStack =>
+  (HasCallStack, HashAlgorithm h) =>
   SlotNo ->
   -- | All potential genesis delegate keys
-  [AllIssuerKeys 'GenesisDelegate] ->
+  [AllIssuerKeys h 'GenesisDelegate] ->
   PParams ->
   AccountState ->
-  DState ->
-  Gen (Maybe (DCert, CertCred))
+  DState h ->
+  Gen (Maybe (DCert h, CertCred h))
 genInstantaneousRewards s delegateKeys pparams accountState delegSt = do
   let (GenDelegs genDelegs_) = _genDelegs delegSt
       lookupGenDelegate (dlgPublic) =
@@ -490,7 +492,7 @@ genInstantaneousRewards s delegateKeys pparams accountState delegSt = do
 
   coreSigners <-
     take <$> QC.elements [5 .. (max 0 $ (length genDelegs_) - 1)]
-      <*> QC.shuffle (lookupGenDelegate . fst <$> Map.elems genDelegs_)
+      <*> QC.shuffle (lookupGenDelegate . genDelegKeyHash <$> Map.elems genDelegs_)
 
   pot <- QC.elements [ReservesMIR, TreasuryMIR]
   let rewardAmount = sum $ Map.elems credCoinMap

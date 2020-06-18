@@ -1,13 +1,9 @@
-{-# OPTIONS_GHC -fno-warn-orphans  -Wno-unused-binds  -Wno-unused-imports #-}
-
 module Main where
 
 import Control.DeepSeq(NFData)
 import Criterion.Main -- (bench, bgroup, defaultMain, whnf)
 
 import Data.Word (Word64)
-
-import Test.Shelley.Spec.Ledger.BenchmarkCrypto(UTxOState)
 
 import Test.Shelley.Spec.Ledger.BenchmarkFunctions
  ( ledgerSpendOneUTxO,

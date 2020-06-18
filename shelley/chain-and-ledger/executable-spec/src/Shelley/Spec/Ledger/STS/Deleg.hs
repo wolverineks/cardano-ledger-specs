@@ -47,7 +47,8 @@ import Shelley.Spec.Ledger.Core (range, (∉), (⋫), haskey, addpair, removekey
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
-  ( GenDelegs (..),
+  ( GenDelegPair (..),
+    GenDelegs (..),
     Hash,
     KeyHash,
     KeyRole (..),
@@ -268,10 +269,10 @@ delegationTransition = do
           futureOtherDelegations =
             range $
               Map.filterWithKey (\(FutureGenDeleg _ k) _ -> k /= gkh) (_fGenDelegs ds)
-          currentOtherColdKeyHashes = Set.map fst currentOtherDelegations
-          futureOtherColdKeyHashes = Set.map fst futureOtherDelegations
-          currentOtherVrfKeyHashes = Set.map snd currentOtherDelegations
-          futureOtherVrfKeyHashes = Set.map snd futureOtherDelegations
+          currentOtherColdKeyHashes = Set.map genDelegKeyHash currentOtherDelegations
+          futureOtherColdKeyHashes = Set.map genDelegKeyHash futureOtherDelegations
+          currentOtherVrfKeyHashes = Set.map genDelegVrfHash currentOtherDelegations
+          futureOtherVrfKeyHashes = Set.map genDelegVrfHash futureOtherDelegations
 
       vkh ∉ (currentOtherColdKeyHashes `Set.union` futureOtherColdKeyHashes)
         ?! DuplicateGenesisDelegateDELEG vkh
@@ -280,7 +281,7 @@ delegationTransition = do
 
       pure $
         ds
-          { _fGenDelegs = addpair (FutureGenDeleg s' gkh) (vkh, vrf) (_fGenDelegs ds)
+          { _fGenDelegs = addpair (FutureGenDeleg s' gkh) (GenDelegPair vkh vrf) (_fGenDelegs ds)
           }
     DCertMir (MIRCert targetPot credCoinMap) -> do
       sp <- liftSTS $ asks stabilityWindow
