@@ -24,6 +24,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Stack (HasCallStack)
 import Shelley.Spec.Ledger.Address (scriptToCred, toCred, pattern Addr)
+import qualified Shelley.Spec.Ledger.Core as Relation
 import Shelley.Spec.Ledger.BaseTypes
   ( Network (..),
     StrictMaybe (..),
@@ -482,8 +483,8 @@ genPtrAddrs :: HasCallStack => DState h -> [Addr h] -> Gen [Addr h]
 genPtrAddrs ds addrs = do
   let pointers = _ptrs ds
 
-  n <- QC.choose (0, min (Map.size pointers) (length addrs))
-  pointerList <- take n <$> QC.shuffle (Map.keys pointers)
+  n <- QC.choose (0, min (Relation.size pointers) (length addrs))
+  pointerList <- take n <$> QC.shuffle (Set.toList(Relation.dom pointers))
 
   let addrs' = zipWith baseAddrToPtrAddr (take n addrs) pointerList
 

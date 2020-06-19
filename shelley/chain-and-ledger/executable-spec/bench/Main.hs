@@ -128,25 +128,24 @@ varyDelegState tag fixed changes initstate action =
 -- =============================================================================
 
 main :: IO ()
-main =
-  defaultMain $
-    [ bgroup "vary input size" $
-        [ varyInput "deregister key" (1, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
-          varyInput "register key" (20001, 20501) [(1, 20), (1, 200), (1, 2000)] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
-          varyInput "withdrawal" (1, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
-          varyInput "register pool" (1, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
-          varyInput "reregister pool" (1, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
-          varyInput "retire pool" (1, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNregisteredPools ledgerRetireStakePools,
-          varyInput "manyKeysOnePool" (5000, 5000) [(1, 50), (1, 500), (1, 5000)] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
-        ],
-      bgroup "vary initial state" $
-        [ varyState "spendOne" 1 [50, 500, 5000] (\_ n -> initUTxO (fromIntegral n)) (\_ _ -> ledgerSpendOneGivenUTxO),
-          varyState "register key" 5001 [50, 500, 5000] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
-          varyState "deregister key" 50 [50, 500, 5000] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
-          varyState "withdrawal" 50 [50, 500, 5000] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
-          varyState "register pool" 5001 [50, 500, 5000] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
-          varyState "reregister pool" 5001 [50, 500, 5000] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
-          varyState "retire pool" 50 [50, 500, 5000] ledgerStateWithNregisteredPools ledgerRetireStakePools,
-          varyDelegState "manyKeysOnePool" 50 [50, 500, 5000] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
-        ]
-    ]
+main = defaultMain $
+         [ bgroup "vary input size" $
+             [ varyInput "deregister key" (1,5000) [(1,5),(1,50),(1,500)] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
+               varyInput "register key" (20001,25001) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
+               varyInput "withdrawal" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
+               varyInput "register pool" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
+               varyInput "reregister pool"   (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
+               varyInput "retire pool" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRetireStakePools,
+               varyInput "manyKeysOnePool" (5000,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
+             ],
+           bgroup "vary initial state" $
+             [ varyState "spendOne" 1 [50,500,5000] (\ _ n -> initUTxO(fromIntegral n)) (\ _ _ -> ledgerSpendOneGivenUTxO),
+               varyState "register key" 5001 [50,500,5000] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
+               varyState "deregister key" 50 [50,500,5000] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
+               varyState "withdrawal" 50 [50,500,5000] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
+               varyState "register pool" 5001 [50,500,5000] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
+               varyState "reregister pool"  5001 [50,500,5000] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
+               varyState "retire pool"  50 [50,500,5000] ledgerStateWithNregisteredPools ledgerRetireStakePools,
+               varyDelegState "manyKeysOnePool" 50 [50,500,5000] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
+             ]
+         ]

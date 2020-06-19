@@ -1,8 +1,11 @@
 {-# LANGUAGE ConstrainedClassMethods #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts        #-}
+{-# LANGUAGE FlexibleInstances       #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
+{-# LANGUAGE TypeFamilies            #-}
+{-# LANGUAGE DeriveGeneric           #-}
+{-# LANGUAGE ScopedTypeVariables     #-}
+{-# LANGUAGE DeriveAnyClass          #-}
 
 module Shelley.Spec.Ledger.Core
   ( Relation
@@ -27,6 +30,10 @@ module Shelley.Spec.Ledger.Core
         -- below are methods not used anywhere
         size
       ),
+    Bimap(..),
+    removeval,
+    getval,
+    bimapFromList,
     (⊆),
     (∪+),
     (∈),
@@ -35,6 +42,8 @@ module Shelley.Spec.Ledger.Core
   )
 where
 
+import Cardano.Binary(ToCBOR(..),FromCBOR(..))
+import Cardano.Prelude (NoUnexpectedThunks, Generic, NFData)
 import Data.Foldable (elem, toList)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -225,3 +234,80 @@ toSet = Set.fromList . toList
 
 (∩) :: Ord a => Set a -> Set a -> Set a
 (∩) = intersection
+
+
+
+-- ==================================
+-- Bimap
+-- ==================================
+
+data Bimap a b = MkBimap !(Map.Map a b) !(Map.Map b a)
+   deriving (Show,Eq,Generic,NFData)
+
+instance (FromCBOR a, Ord a, FromCBOR b, Ord b) => FromCBOR (Bimap a b) where
+    fromCBOR = do
+       mappairs::[(a,b)] <- fromCBOR
+       let (m1,m2) = foldr (\ (k,v) (n1,n2) -> (Map.insert k v n1, Map.insert v k n2)) (Map.empty,Map.empty) mappairs
+       pure(MkBimap m1 m2)
+
+
+
+instance (ToCBOR a, Ord a, ToCBOR b, Ord b) => ToCBOR (Bimap a b) where
+  toCBOR (MkBimap m1 _m2) = toCBOR(Map.toList m1)
+
+instance (NoUnexpectedThunks a, NoUnexpectedThunks b) => NoUnexpectedThunks (Bimap a b)
+
+instance (Ord k, Ord v) => Relation (Bimap k v) where
+  type Domain (Bimap k v) = k
+  type Range (Bimap k v) = v
+
+  singleton k v = MkBimap (Map.singleton k v) (Map.singleton v k)
+
+  dom (MkBimap m1 _m2) = Map.keysSet m1
+  range (MkBimap _m1 m2) = Map.keysSet m2
+
+  s ◁ (MkBimap m1 _m2) = MkBimap left right
+     where left = Map.restrictKeys m1 s
+           right = Map.foldrWithKey (\ k v ans -> Map.insert v k ans) Map.empty left
+
+  s ⋪ (MkBimap m1 _m2) = MkBimap left right
+     where left = Map.withoutKeys m1 s
+           right = Map.foldrWithKey (\ k v ans -> Map.insert v k ans) Map.empty left
+
+  (MkBimap _m1 m2) ▷ s = MkBimap left right
+     where right = Map.restrictKeys m2 s
+           left = Map.foldrWithKey (\ v k ans -> Map.insert k v ans) Map.empty right
+
+  (MkBimap _m1 m2) ⋫ s = MkBimap left right
+     where right = Map.withoutKeys m2 s
+           left = Map.foldrWithKey (\ k v ans -> Map.insert v k ans) Map.empty right
+
+  (MkBimap m1 m2) ∪ (MkBimap n1 n2) = MkBimap (Map.union m1 n1) (Map.union m2 n2)
+
+  d0 ⨃ d1 = d1 ∪ d0
+
+  size (MkBimap m1 _m2) = fromIntegral (Map.size m1)
+
+  {-# INLINE haskey #-}
+  haskey x (MkBimap m1 _m2) = case Map.lookup x m1 of Just _ -> True; Nothing -> False
+
+  {-# INLINE addpair #-}
+  addpair k y (MkBimap m1 m2) = MkBimap (Map.insertWith (\x _y -> x) k y m1)  (Map.insertWith (\x _y -> x) y k m2)
+
+  {-# INLINE removekey #-}
+  removekey k (m@(MkBimap m1 m2)) =
+     case Map.lookup k m1 of
+        Just v -> MkBimap (Map.delete k m1) (Map.delete v m2)
+        Nothing -> m
+
+removeval:: (Ord k, Ord v) => v -> Bimap k v -> Bimap k v
+removeval v (m@(MkBimap m1 m2)) =
+     case Map.lookup v m2 of
+        Just k -> MkBimap (Map.delete k m1) (Map.delete v m2)
+        Nothing -> m
+
+getval:: (Ord k) => k -> Bimap k v -> Maybe v
+getval v (MkBimap m1 _m2) = Map.lookup v m1
+
+bimapFromList:: (Ord k, Ord v) => [(k,v)] -> Bimap k v
+bimapFromList pairs = MkBimap (Map.fromList pairs) (foldr (\ (k,v) ans -> Map.insert v k ans) Map.empty pairs)

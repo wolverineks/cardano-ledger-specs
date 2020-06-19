@@ -1,4 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE DeriveAnyClass      #-}
 
 module Shelley.Spec.Ledger.Orphans where
 
@@ -10,6 +12,7 @@ import Data.IP (IPv4, IPv6)
 import Data.Sequence.Strict (StrictSeq, fromList, getSeq)
 import qualified Data.Text as Text
 import Shelley.Spec.Ledger.Slot (BlockNo, EpochNo)
+
 
 instance FromJSON IPv4 where
   parseJSON =

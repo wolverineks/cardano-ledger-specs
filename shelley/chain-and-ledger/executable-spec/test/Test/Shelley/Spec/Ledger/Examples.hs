@@ -348,6 +348,7 @@ import Test.Shelley.Spec.Ledger.Generator.Core
   )
 import Test.Shelley.Spec.Ledger.Utils
 import Test.Tasty.HUnit (Assertion, assertBool, assertFailure)
+import Shelley.Spec.Ledger.Core(bimapFromList)
 
 data CHAINExample h = CHAINExample
   { -- | State to start testing with
@@ -821,7 +822,7 @@ dsEx2A :: HashAlgorithm h => DState h
 dsEx2A =
   dsEx1
     { _ptrs =
-        Map.fromList
+        bimapFromList
           [ (Ptr (SlotNo 10) 0 0, aliceSHK),
             (Ptr (SlotNo 10) 0 1, bobSHK),
             (Ptr (SlotNo 10) 0 2, carlSHK)
@@ -1856,7 +1857,7 @@ dsEx2J :: HashAlgorithm h => DState h
 dsEx2J =
   dsEx1
     { _ptrs =
-        Map.fromList
+        bimapFromList
           [ (Ptr (SlotNo 10) 0 0, aliceSHK),
             (Ptr (SlotNo 10) 0 2, carlSHK)
           ],
@@ -2115,7 +2116,7 @@ dsEx2L :: HashAlgorithm h => DState h
 dsEx2L =
   dsEx1
     { _ptrs =
-        Map.fromList
+        bimapFromList
           [ (Ptr (SlotNo 10) 0 0, aliceSHK),
             (Ptr (SlotNo 10) 0 2, carlSHK)
           ],

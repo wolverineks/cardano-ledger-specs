@@ -120,7 +120,7 @@ import Shelley.Spec.Ledger.BaseTypes
     intervalValue,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (dom, (∪), (∪+), (⋪), (▷), (◁))
+import Shelley.Spec.Ledger.Core (Bimap(..), dom, (∪), (∪+), (⋪), (▷), (◁))
 import Shelley.Spec.Ledger.Credential (Credential (..))
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Delegation.Certificates
@@ -276,7 +276,7 @@ data DState crypto = DState
     -- | The current delegations.
     _delegations :: !(Map (Credential 'Staking crypto) (KeyHash 'StakePool crypto)),
     -- | The pointed to hash keys.
-    _ptrs :: !(Map Ptr (Credential 'Staking crypto)),
+    _ptrs :: !(Bimap Ptr (Credential 'Staking crypto)),
     -- | future genesis key delegations
     _fGenDelegs :: !(Map (FutureGenDeleg crypto) (GenDelegPair crypto)),
     -- | Genesis key delegations
@@ -479,7 +479,7 @@ emptyDState =
     (StakeCreds Map.empty)
     Map.empty
     Map.empty
-    Map.empty
+    (MkBimap Map.empty Map.empty)
     Map.empty
     (GenDelegs Map.empty)
     emptyInstantaneousRewards

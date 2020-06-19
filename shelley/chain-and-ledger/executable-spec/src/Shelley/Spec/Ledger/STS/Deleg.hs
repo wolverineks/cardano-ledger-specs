@@ -43,7 +43,7 @@ import Shelley.Spec.Ledger.BaseTypes
     invalidKey,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (addpair, haskey, range, removekey, (∉), (⋫))
+import Shelley.Spec.Ledger.Core (addpair, haskey, range, removekey, removeval, (∉))
 import Shelley.Spec.Ledger.Credential (Credential)
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Keys
@@ -240,7 +240,7 @@ delegationTransition = do
           { _stkCreds = removekey hk (_stkCreds ds),
             _rewards = removekey (RewardAcnt network hk) (_rewards ds),
             _delegations = removekey hk (_delegations ds),
-            _ptrs = _ptrs ds ⋫ Set.singleton hk
+            _ptrs = removeval hk (_ptrs ds)    --  _ptrs ds ⋫ Set.singleton hk
             -- TODO make _ptrs a bijection. This operation takes time proportional to (_ptrs ds)
             -- OR turn _stkCreds into a mapping of stake credentials to pointers
             -- note that the slot values in _stkCreds is no longer needed (no decay)

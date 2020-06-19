@@ -239,8 +239,8 @@ makeSimpleTx body keysAddr keysReg =
   Tx
     body
     mempty
-      { addrWits = makeWitnessesVKey (hashTxBody body) keysAddr,
-        regWits = makeWitnessesVKey (hashTxBody body) keysReg
+      { addrWits = makeWitnessesVKey (hashTxBody body) (keysAddr ++ keysReg)
+       -- regWits = makeWitnessesVKey (hashTxBody body) keysReg
       }
     SNothing
 

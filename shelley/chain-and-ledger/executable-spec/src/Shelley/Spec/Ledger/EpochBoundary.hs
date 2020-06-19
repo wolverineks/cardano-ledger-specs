@@ -41,7 +41,7 @@ import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Shelley.Spec.Ledger.Address (Addr (..))
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (dom, (▷), (◁))
+import Shelley.Spec.Ledger.Core (Bimap, getval, dom, (▷), (◁))
 import Shelley.Spec.Ledger.Credential (Credential, Ptr, StakeReference (..))
 import Shelley.Spec.Ledger.Crypto
 import Shelley.Spec.Ledger.Delegation.Certificates
@@ -100,7 +100,7 @@ getStakePtr _ = Nothing
 ptrStake ::
   forall crypto.
   Map (Addr crypto) Coin ->
-  Map Ptr (Credential 'Staking crypto) ->
+  Bimap Ptr (Credential 'Staking crypto) ->
   [(Credential 'Staking crypto, Coin)]
 ptrStake vals pointers =
   mapMaybe convert $ Map.toList vals
@@ -111,7 +111,7 @@ ptrStake vals pointers =
     convert (a, c) =
       case getStakePtr a of
         Nothing -> Nothing
-        Just s -> (,c) <$> Map.lookup s pointers
+        Just s -> (,c) <$> getval s pointers
 
 rewardStake ::
   forall crypto.

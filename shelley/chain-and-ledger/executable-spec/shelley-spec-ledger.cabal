@@ -251,6 +251,7 @@ benchmark mainbench
                     bytestring-conversion,
                     hedgehog,
                     QuickCheck,
+                    scientific,
                     tasty-quickcheck,
                     tasty-hunit,
                     tasty,
