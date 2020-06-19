@@ -165,7 +165,7 @@ prtclTransition = do
     judgmentContext
   let bhb = bhbody bh
       slot = bheaderSlotNo bhb
-      eta = mkNonce . VRF.certifiedNatural $ bheaderEta bhb
+      eta = mkNonce . VRF.certifiedOutput $ bheaderEta bhb
 
   UpdnState eta0' etaV' etaC' etaH' <-
     trans @(UPDN crypto) $

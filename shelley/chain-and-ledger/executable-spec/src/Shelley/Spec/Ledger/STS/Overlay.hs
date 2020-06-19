@@ -193,10 +193,11 @@ praosVrfChecks eta0 (PoolDistr pd) f bhb = do
         (throwError $ VRFKeyWrongVRFKey hk vrfHK (hashVerKeyVRF vrfK))
       vrfChecks eta0 bhb
       unless
-        (checkLeaderValue (VRF.certifiedNatural $ bheaderL bhb) sigma f)
-        (throwError $ VRFLeaderValueTooBig (VRF.certifiedNatural $ bheaderL bhb) sigma f)
+        (checkLeaderValue certNat sigma f)
+        (throwError $ VRFLeaderValueTooBig certNat sigma f)
       pure ()
   where
+    certNat = certifiedNatural $ bheaderL bhb
     hk = coerceKeyRole . hashKey $ bheaderVk bhb
     vrfK = bheaderVrfVk bhb
 

@@ -189,7 +189,7 @@ x ⭒ NeutralNonce = x
 NeutralNonce ⭒ x = x
 
 -- | Make a nonce from a natural number
-mkNonce :: Natural -> Nonce
+mkNonce :: ByteString -> Nonce
 mkNonce = Nonce . coerce . hash @SHA256
 
 -- | Seed to the verifiable random function.

@@ -48,7 +48,7 @@ instance
   type BaseM (UPDN crypto) = ShelleyBase
   data PredicateFailure (UPDN crypto) -- No predicate failures
     deriving (Generic, Show, Eq)
-  initialRules = [pure (UpdnState (mkNonce 0) (mkNonce 0) (mkNonce 0) (mkNonce 0))]
+  initialRules = [pure (UpdnState NeutralNonce NeutralNonce NeutralNonce NeutralNonce)]
   transitionRules = [updTransition]
 
 instance NoUnexpectedThunks (PredicateFailure (UPDN crypto))

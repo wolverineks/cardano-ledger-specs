@@ -22,29 +22,43 @@ write-ghc-environment-files: always
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: cba2a46086b824f413d7fb71c140da2a83483cd4
-  --sha256: 183qblzac63lndbk5jlsj1r8r91iwb4vqzyi6gz0j1n3nl7xlg3h
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
   subdir: binary
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: cba2a46086b824f413d7fb71c140da2a83483cd4
-  --sha256: 183qblzac63lndbk5jlsj1r8r91iwb4vqzyi6gz0j1n3nl7xlg3h
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
   subdir: binary/test
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: cba2a46086b824f413d7fb71c140da2a83483cd4
-  --sha256: 183qblzac63lndbk5jlsj1r8r91iwb4vqzyi6gz0j1n3nl7xlg3h
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
   subdir: cardano-crypto-class
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: cba2a46086b824f413d7fb71c140da2a83483cd4
-  --sha256: 183qblzac63lndbk5jlsj1r8r91iwb4vqzyi6gz0j1n3nl7xlg3h
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
+  subdir: cardano-crypto-praos
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-base
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
+  subdir: cardano-crypto-tests
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-base
+  tag: 1574220b6262c3735fb923a324c6c0ad867dec62
+  --sha256: 0khkkxf4gqzpddagak39rmazjx877v7rqc629kqh61wpwkkfnk9h
   subdir: slotting
 
 source-repository-package
@@ -69,8 +83,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 71df15f7b888d2671f619cc632080aaaaca48087
-  --sha256: 02shwi4qppf88biq2y9amfzkzif9j0fdj0d77zdjrfjacldvc6ci
+  tag: efa4b5ecd7f0a13124616b12679cd42517cd905a
+  --sha256: 0h1h5ifl5d7dl3y6fym9pjd6rfrbh5rbyxs0xw5las503pibv2bf
   subdir:   contra-tracer
 
 source-repository-package

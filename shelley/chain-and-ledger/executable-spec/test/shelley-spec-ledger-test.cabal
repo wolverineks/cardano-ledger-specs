@@ -62,6 +62,7 @@ library
     bytestring-conversion,
     cardano-binary,
     cardano-crypto-class,
+    cardano-crypto-praos,
     cardano-crypto-test,
     cardano-crypto-wrapper,
     cardano-ledger,

@@ -75,6 +75,7 @@ import Cardano.Crypto.Hash (SHA256)
 import qualified Cardano.Crypto.Hash.Class as Hash
 import qualified Cardano.Crypto.KES as KES
 import qualified Cardano.Crypto.VRF as VRF
+import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Prelude
   ( AllowThunksIn (..),
     ByteString,
@@ -573,7 +574,7 @@ bBodySize ::
 bBodySize = BS.length . serializeEncoding' . toCBORGroup
 
 slotToNonce :: SlotNo -> Nonce
-slotToNonce (SlotNo s) = mkNonce (fromIntegral s)
+slotToNonce (SlotNo s) = mkNonce (writeBinaryWord64 s)
 
 bheader ::
   Crypto crypto =>
@@ -648,11 +649,14 @@ checkLeaderValue certNat σ f =
     q = fromRational (1 % toInteger (certNatMax - certNat))
     x = (- fromRational σ * c)
 
+-- | These seeds are incorporated into the seed computations, and serve to
+-- distinguish between the seed used for the evolving nonce and that used for
+-- leader selection. They serve no particular cryptographic role.
 seedEta :: Nonce
-seedEta = mkNonce 0
+seedEta = mkNonce "eta"
 
 seedL :: Nonce
-seedL = mkNonce 1
+seedL = mkNonce "ell"
 
 hBbsize :: BHBody crypto -> Natural
 hBbsize = bsize

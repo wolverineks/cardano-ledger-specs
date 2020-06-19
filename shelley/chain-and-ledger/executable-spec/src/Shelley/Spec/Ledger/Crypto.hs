@@ -8,8 +8,10 @@ import Cardano.Crypto.DSIGN
 import Cardano.Crypto.Hash
 import Cardano.Crypto.KES
 import Cardano.Crypto.VRF
+import Cardano.Crypto.Util (readBinaryNatural)
 import Data.Kind (Type)
 import Data.Typeable (Typeable)
+import Numeric.Natural (Natural)
 
 class
   ( HashAlgorithm (HASH c),
@@ -29,3 +31,7 @@ class
   type DSIGN c :: Type
   type KES c :: Type
   type VRF c :: Type
+
+-- | Extract a natural number from VRF output in a canonical way.
+certifiedNatural :: CertifiedVRF v a -> Natural
+certifiedNatural = readBinaryNatural . certifiedOutput
