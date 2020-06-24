@@ -34,6 +34,7 @@ module Shelley.Spec.Ledger.Core
     removeval,
     getval,
     bimapFromList,
+    bimapEmpty,
     (⊆),
     (∪+),
     (∈),
@@ -125,6 +126,10 @@ a ∉ f = not $ elem a f
 
 infixl 4 ∉
 
+-- ==========================================
+-- Map instance
+-- ==========================================
+
 instance Relation (Map k v) where
   type Domain (Map k v) = k
   type Range (Map k v) = v
@@ -163,6 +168,12 @@ instance Relation (Map k v) where
 (∪+) :: (Ord a, Num b) => Map a b -> Map a b -> Map a b
 a ∪+ b = (Map.unionWith (+) a b)
 
+
+-- ==========================================
+-- Set instance
+-- ==========================================
+
+
 instance Relation (Set (a, b)) where
   type Domain (Set (a, b)) = a
   type Range (Set (a, b)) = b
@@ -190,6 +201,11 @@ instance Relation (Set (a, b)) where
   size = fromIntegral . Set.size
 
   addpair key val set = Set.insert (key, val) set
+
+
+-- ==========================================
+-- List instance
+-- ==========================================
 
 -- The [(a,b)] instance is used in `stakeDistr` in the file LedgerState.hs
 instance Relation [(a, b)] where
@@ -236,9 +252,12 @@ toSet = Set.fromList . toList
 (∩) = intersection
 
 
-
 -- ==================================
 -- Bimap
+-- Reasons we can't use Data.Bimap
+-- 1) The constructor MkBimap is not exported, so we can't roll our own operations necessary to get good asymptotic performance
+-- 2) Missing operation 'restrictkeys' and 'withoutkeys' make performant versions of operations  ◁ ⋪ ▷ ⋫ hard.
+-- 3) Missing operation 'union', make performant versions of ∪ and ⨃ hard.
 -- ==================================
 
 data Bimap a b = MkBimap !(Map.Map a b) !(Map.Map b a)
@@ -249,8 +268,6 @@ instance (FromCBOR a, Ord a, FromCBOR b, Ord b) => FromCBOR (Bimap a b) where
        mappairs::[(a,b)] <- fromCBOR
        let (m1,m2) = foldr (\ (k,v) (n1,n2) -> (Map.insert k v n1, Map.insert v k n2)) (Map.empty,Map.empty) mappairs
        pure(MkBimap m1 m2)
-
-
 
 instance (ToCBOR a, Ord a, ToCBOR b, Ord b) => ToCBOR (Bimap a b) where
   toCBOR (MkBimap m1 _m2) = toCBOR(Map.toList m1)
@@ -300,6 +317,9 @@ instance (Ord k, Ord v) => Relation (Bimap k v) where
         Just v -> MkBimap (Map.delete k m1) (Map.delete v m2)
         Nothing -> m
 
+-- ======================================
+-- Extra operations on Bimap
+
 removeval:: (Ord k, Ord v) => v -> Bimap k v -> Bimap k v
 removeval v (m@(MkBimap m1 m2)) =
      case Map.lookup v m2 of
@@ -311,3 +331,6 @@ getval v (MkBimap m1 _m2) = Map.lookup v m1
 
 bimapFromList:: (Ord k, Ord v) => [(k,v)] -> Bimap k v
 bimapFromList pairs = MkBimap (Map.fromList pairs) (foldr (\ (k,v) ans -> Map.insert v k ans) Map.empty pairs)
+
+bimapEmpty :: Bimap a b
+bimapEmpty = MkBimap Map.empty Map.empty

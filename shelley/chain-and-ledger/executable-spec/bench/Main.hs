@@ -20,6 +20,8 @@ import Test.Shelley.Spec.Ledger.BenchmarkFunctions
     ledgerStateWithNregisteredPools, -- How to compute an initial state with N StakePools
   )
 
+import IterK(m5,m6,domEq)
+
 -- =================================================
 -- Spending 1 UTxO
 
@@ -127,16 +129,16 @@ varyDelegState tag fixed changes initstate action =
 
 -- =============================================================================
 
-main :: IO ()
-main = defaultMain $
+main1 :: IO ()
+main1 = defaultMain $
          [ bgroup "vary input size" $
-             [ varyInput "deregister key" (1,5000) [(1,5),(1,50),(1,500)] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
-               varyInput "register key" (20001,25001) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
-               varyInput "withdrawal" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
-               varyInput "register pool" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
-               varyInput "reregister pool"   (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
-               varyInput "retire pool" (1,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRetireStakePools,
-               varyInput "manyKeysOnePool" (5000,5000) [(1,50),(1,500),(1,5000)] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
+             [ varyInput "deregister key" (1,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerDeRegisterStakeKeys,
+               varyInput "register key" (50001,100001) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRegisterStakeKeys,
+               varyInput "withdrawal" (1,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredKeys ledgerRewardWithdrawals,
+               varyInput "register pool" (1,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRegisterStakePools,
+               varyInput "reregister pool"   (1,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerReRegisterStakePools,
+               varyInput "retire pool" (1,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNregisteredPools ledgerRetireStakePools,
+               varyInput "manyKeysOnePool" (50000,50000) [(1,50),(1,500),(1,5000)] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
              ],
            bgroup "vary initial state" $
              [ varyState "spendOne" 1 [50,500,5000] (\ _ n -> initUTxO(fromIntegral n)) (\ _ _ -> ledgerSpendOneGivenUTxO),
@@ -149,3 +151,10 @@ main = defaultMain $
                varyDelegState "manyKeysOnePool" 50 [50,500,5000] ledgerStateWithNkeysMpools ledgerDelegateManyKeysOnePool
              ]
          ]
+
+main5 :: IO()
+main5 = defaultMain $
+    [ bgroup "ITER" [ env (return (m5,m6)) (\ state -> bench ("CASE NOT MYGO") (whnf (\ (m,n) -> domEq m n) state)) ] ]
+
+main :: IO()
+main = main5

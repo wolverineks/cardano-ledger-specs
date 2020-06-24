@@ -120,7 +120,7 @@ import Shelley.Spec.Ledger.BaseTypes
     intervalValue,
   )
 import Shelley.Spec.Ledger.Coin (Coin (..))
-import Shelley.Spec.Ledger.Core (Bimap(..), dom, (∪), (∪+), (⋪), (▷), (◁))
+import Shelley.Spec.Ledger.Core (Bimap, bimapEmpty, dom, (∪), (∪+), (⋪), (▷), (◁))
 import Shelley.Spec.Ledger.Credential (Credential (..))
 import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Delegation.Certificates
@@ -479,7 +479,7 @@ emptyDState =
     (StakeCreds Map.empty)
     Map.empty
     Map.empty
-    (MkBimap Map.empty Map.empty)
+    bimapEmpty
     Map.empty
     (GenDelegs Map.empty)
     emptyInstantaneousRewards
