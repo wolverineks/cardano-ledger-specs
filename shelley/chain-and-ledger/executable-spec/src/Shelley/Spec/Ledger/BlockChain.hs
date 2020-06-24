@@ -59,9 +59,11 @@ import Cardano.Binary
     decodeListLen,
     decodeListLenOf,
     decodeNull,
+    decodeWord8,
     encodeListLen,
     encodeNull,
     encodePreEncoded,
+    enforceSize,
     matchSize,
     peekTokenType,
     serialize',
@@ -95,7 +97,7 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
-import Data.Word (Word64)
+import Data.Word (Word64, Word8)
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Shelley.Spec.Ledger.BaseTypes
@@ -112,6 +114,7 @@ import Shelley.Spec.Ledger.BaseTypes
   )
 import Shelley.Spec.Ledger.Crypto
 import Shelley.Spec.Ledger.EpochBoundary (BlocksMade (..))
+import Shelley.Spec.Ledger.Genesis (ShelleyGenesis)
 import Shelley.Spec.Ledger.Keys
   ( CertifiedVRF,
     Hash,
@@ -290,7 +293,9 @@ instance
     pure $ BHeader' <$> pure bhb <*> pure sig
 
 -- | The previous hash of a block
-data PrevHash crypto = GenesisHash | BlockHash !(HashHeader crypto)
+data PrevHash crypto
+  = GenesisHash !(Hash crypto (ShelleyGenesis crypto))
+  | BlockHash !(HashHeader crypto)
   deriving (Show, Eq, Generic, Ord)
 
 instance Crypto crypto => NoUnexpectedThunks (PrevHash crypto)
@@ -299,11 +304,23 @@ instance
   Crypto crypto =>
   ToCBOR (PrevHash crypto)
   where
-  toCBOR GenesisHash = encodeNull
-  toCBOR (BlockHash h) = toCBOR h
+  toCBOR (GenesisHash h) = encodeListLen 2 <> toCBOR (0 :: Word8) <> toCBOR h
+  toCBOR (BlockHash h) = encodeListLen 2 <> toCBOR (1 :: Word8) <> toCBOR h
   encodedSizeExpr size proxy =
     szCases
-      [ Case "GenesisHash" 1,
+      [ Case
+          "GenesisHash"
+          ( encodedSizeExpr
+              size
+              ( ( \case
+                    -- we are mapping a 'Proxy', so nothing can
+                    -- go wrong here
+                    GenesisHash h -> h
+                    BlockHash _ -> error "impossible happend"
+                )
+                  <$> proxy
+              )
+          ),
         Case
           "BlockHash"
           ( encodedSizeExpr
@@ -311,7 +328,7 @@ instance
               ( ( \case
                     -- we are mapping a 'Proxy', so nothing can
                     -- go wrong here
-                    GenesisHash -> error "impossible happend"
+                    GenesisHash _ -> error "impossible happend"
                     BlockHash h -> h
                 )
                   <$> proxy
@@ -324,22 +341,16 @@ instance
   FromCBOR (PrevHash crypto)
   where
   fromCBOR = do
-    peekTokenType >>= \case
-      TypeNull -> do
-        decodeNull
-        pure GenesisHash
-      _ -> BlockHash <$> fromCBOR
+    enforceSize "PrevHash" 2
+    decodeWord8 >>= \case
+      0 -> GenesisHash <$> fromCBOR
+      1 -> BlockHash <$> fromCBOR
 
 prevHashToNonce ::
   PrevHash crypto ->
   Nonce
 prevHashToNonce = \case
-  GenesisHash -> NeutralNonce -- This case can only happen when starting Shelley from genesis,
-  -- setting the intial chain state to some epoch e,
-  -- and having the first block be in epoch e+1.
-  -- In this edge case there is no need to add any extra
-  -- entropy via the previous header hash to the next epoch nonce,
-  -- so using the neutral nonce is appropriate.
+  GenesisHash h -> Nonce $ coerce h
   BlockHash ph -> hashHeaderToNonce ph
 
 data LastAppliedBlock crypto = LastAppliedBlock
