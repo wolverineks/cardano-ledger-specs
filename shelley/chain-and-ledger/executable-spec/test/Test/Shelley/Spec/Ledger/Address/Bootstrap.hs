@@ -47,7 +47,7 @@ bootstrapTest = T.testProperty "bootstrap addr root" $ H.property $ do
           { bwKey = shelleyVKey,
             bwChainCode = chainCode,
             bwSig = dummySig,
-            bwPadding = fromJust $ getPadding byronAddr
+            bwPadding = fromJust $ byronAddressPadding byronAddr
           }
   (coerceKeyRole $ bootstrapKeyHash addr) === bootstrapWitKeyHash witness
 
