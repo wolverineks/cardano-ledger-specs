@@ -7,73 +7,80 @@
 {-# LANGUAGE TypeOperators, DataKinds,  KindSignatures #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE BangPatterns #-}
-
+{-# LANGUAGE TypeFamilies, TypeFamilyDependencies  #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- Iteration with Continuations
 
 module IterK where
 
+import Prelude hiding (lookup)
 import Debug.Trace
 -- import Data.Array
 import Data.List(sort,nub)
+
+import Data.Map.Strict(Map)
 import qualified Data.Map.Strict as Map
 import Data.Map.Internal(Map(..),link,link2)
--- import Utils.Containers.Internal.PtrEquality (ptrEq)
 import Data.Map.Internal.Debug(showTree)
+
+import Data.Maybe(fromJust,catMaybes)
+
 import Shelley.Spec.Ledger.Core(Bimap(..),bimapFromList, bimapEmpty)
 import qualified Shelley.Spec.Ledger.Core as Core
 import qualified Control.Monad as CM
 import qualified Control.Applicative as AP
 
 import qualified Data.Set as Set
+import Data.Set(Set)
+
 import Collect
-import SetAlgebra
+import SetAlgebra(Iter(..),
+                  And(..),Or(..),Project(..),Guard(..),Diff(..),Single(..),Sett(..),AndP(..),
+                  Exp(..),BaseRep(..),
+                  dom, range, singleton, setSingleton, (◁), (⋪), (▷), (⋫), (∪), (⨃), (∈), (∉),(|>),(<|),
+                  element,shape,
+                  SymFun(..), Fun, fun, SymFun, apply
+                 )
+-- ================================ EXPERIMENT ====================================
+-- And with projection
 
--- ====================================================
-{-
-instance Semigroup (Bimap k v) where
-   (<>) x y = error ("NO Bimap merge yet")
-instance Monoid (Bimap k v) where
-   mempty = bimapEmpty
 
-instance Semigroup (Pair k v) where
-   Fail <> x = x
-   x <> Fail = x
-   x <> y = x
+andLoop2 ::
+  (Ord key,Iter f1, Iter f2) =>
+  (key, b1, f1 key b1) ->
+  (key, b2, f2 key b2) ->
+  (b1 -> b2 -> b3) ->
+  Collect (key, b3, AndP f1 f2 key b3)
 
-instance Monoid (Pair k v) where
-   mempty = Fail
-   mappend = (<>)
+andLoop2 (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) p =
+   case compare k1 k2 of
+      EQ -> one (k1,(p v1 v2), AndP f1 g2 p)
+      LT -> do { ftrip' <- lub k2 f1; andLoop2 ftrip' gtrip p }
+      GT -> do { gtrip' <- lub k1 g2; andLoop2 ftrip gtrip' p }
 
--- These are not the only instances. We Probably need a more general approach
--- Perhaps expose the "ans" type as a Parameter of (collect ans t)
+instance Iter (AndP f g) where
+   nxt (AndP f g p) = do { triple1 <- nxt f; triple2 <- nxt g; andLoop2 triple1 triple2 p }
+   lub  key (AndP f g p) = do { triple1 <- lub key f; triple2 <- lub key g; andLoop2 triple1 triple2 p}
 
-instance Semigroup Int where
-  (<>) = (+)
+   haskey k (AndP f g p) = haskey k f && haskey k g
+   isnull (AndP f g p) = isnull f || isnull g
 
-instance Monoid Int where
-  mempty = 0
-  mappend = (<>)
+   repOf (AndP f g p) = AndPR (repOf f) (repOf g) p
 
-instance Semigroup Bool where
-  (<>) = (&&)
+   lookup k (x@(AndP f g p)) = do { v1 <- lookup k f; v2 <- lookup k g; Just(p v1 v2)} -- In the Maybe Monad
+   addpair k v (x@(AndP f g p)) = error("Can't addpair to the view (AndP f g p).")
+   removekey k (AndP f g p) = AndP (removekey k f) g p
 
-instance Monoid Bool where
-  mempty = False
-  mappend = (<>)
--}
--- ==================================================================
--- One type that can be iterated over (in order) and hence collected
--- Of course the iteration is trivial as there are only 0 or 1 pairs.
+
+-- ==========================================================================
+--  let's build a few things to test with
 
 chars::String
 chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdeghijklmnopqrstuvwxyz0123456789"
 
 nchars :: Int
 nchars = length chars
-
--- ==========================================================================
--- Data.Map.Strict is another example, let's build a few things to test with
 
 m0 :: Map.Map Int Char
 m0 = Map.fromList [(1,'a'),(2,'z'),(4,'g')]
@@ -97,38 +104,51 @@ b0::Bimap Int Char
 b0 = bimapFromList [(1,'a'),(2,'z'),(4,'g')]
 
 
--- ======================================================================================
--- A binary type constructor can act as an iterator, collecting the pairs in the type,
--- if it supports the following operations: `nxt` and `lub`
--- If it iterates over items in increasing order, and can skip over many items
--- using `lub` in sub-linear time, it can make things really fast. Many collections
--- support lub: Balanced binary trees, Arrays (using binary search), Tries, etc.
+-- =================================================================
+-- The most basic operation of a Collect computation, is to create a
+-- collection from the 'nxt' operator. The two collections possible
+-- produce their elements in LIFO or FIFO order.
 
-instance Iter Pair where
-  nxt (Two k v) = Collect(\ ans f -> f (k,v,Fail) ans)
-  nxt (One k) = Collect(\ ans f ->  f (k,(),Fail) ans)
+lifo :: Iter f => f k v -> Collect (k,v)
+lifo x = do { (k,v,x2) <- nxt x; front (k,v) (lifo x2) }
+
+fifo :: Iter f => f k v -> Collect (k,v)
+fifo x = do { (k,v,x2) <- nxt x; rear (fifo x2) (k,v)}
+
+-- =====================================================================================
+-- Instances for the Basic types
+-- =====================================================================================
+
+
+-- =================== Basic Single =================
+
+instance Iter Single where
+  nxt (Single k v) = Collect(\ ans f -> f (k,v,Fail) ans)
+  nxt (SetSingle k) = Collect(\ ans f ->  f (k,(),Fail) ans)
   nxt Fail = Collect(\ ans f -> ans)
-  lub key (Two k v) = Collect(\ ans f -> if k<=key then f (k,v,Fail) ans else ans)
-  lub key (One k) = Collect(\ ans f -> if k<=key then f(k,(),Fail) ans else ans)
+  lub key (Single k v) = Collect(\ ans f -> if k<=key then f (k,v,Fail) ans else ans)
+  lub key (SetSingle k) = Collect(\ ans f -> if k<=key then f(k,(),Fail) ans else ans)
   lub key Fail = Collect(\ ans f -> ans)
-  x `element` (Two k v) = when (x==k)
-  x `element` (One k) = when (x==k)
-  x `element` Fail = when False
-  haskey k (One a) = k==a
-  haskey k (Two a b) = k==a
+  haskey k (SetSingle a) = k==a
+  haskey k (Single a b) = k==a
   haskey k Fail = False
-  addpair k v (Two a b) = if k==a then Two a v else Fail
-  addpair k v (One a) = if k==a then Two a v else Fail
-  addpair k v Fail = Two k v
-  removekey key (Two a b) = if key==a then Fail else (Two a b)
-  removekey key (One a) = if key==a then Fail else (One a)
-  removekey key Fail = Fail
-  empty Fail = True
-  empty _ = False
+  isnull Fail = True
+  isnull _ = False
+  repOf x = SingleR
 
+  lookup k (SetSingle a) = if k==a then Just() else Nothing
+  lookup k (Single a b) = if k==a then Just b else Nothing
+  lookup k Fail = Nothing
+  addpair k v (Single a b) = if k==a then Single a v else Fail
+  addpair k v (SetSingle a) = if k==a then Single a v else Fail
+  addpair k v Fail = Single k v
+  removekey key (Single a b) = if key==a then Fail else (Single a b)
+  removekey key (SetSingle a) = if key==a then Fail else (SetSingle a)
+  removekey key Fail = Fail
+
+-- ============= Basic Sett ===============
 
 instance Iter Sett where
-  x `element` (Sett m) =  when (Set.member x m)
   nxt (Sett m) = Collect (\ ans f -> if Set.null m then ans else let (k,nextm) = Set.deleteFindMin m in f (k,(),Sett nextm) ans)
   lub key (Sett m) =
       Collect (\ ans f -> if Set.null m
@@ -138,14 +158,17 @@ instance Iter Sett where
                                      (_left,False,right) -> if Set.null right
                                                         then ans
                                                         else let (k,nextm) = Set.deleteFindMin right in f (k,(),Sett  nextm) ans)
-  addpair key unit (Sett m) = Sett(Set.insert key m)
   haskey key (Sett m) = Set.member key m
-  empty (Sett x) = Set.null x
+  isnull (Sett x) = Set.null x
+  repOf (Sett x) = SetR
+
+  addpair key unit (Sett m) = Sett(Set.insert key m)
+  lookup k (Sett m) = if Set.member k m then Just() else Nothing
   removekey k (Sett m) = Sett(Set.delete k m)
 
+-- ================== Basic Map ===============
 
 instance Iter Map.Map where
-  x `element` m =  when (Map.member x m)
   nxt m = Collect (\ ans f ->
      case Map.minViewWithKey m of
         Nothing -> ans
@@ -158,11 +181,14 @@ instance Iter Map.Map where
        (_left,Nothing,right) -> f (k,v,m3) ans
            where ((k,v),m3) = Map.deleteFindMin right)
   haskey x m = case Map.lookup x m of Just _ -> True; Nothing -> False
+  isnull = Map.null
+  repOf x = MapR
+
+  lookup = Map.lookup
   addpair = Map.insertWith (\x _y -> x)
   removekey k m = Map.delete k m
-  empty = Map.null
 
--- ==================================
+-- ============== Basic Bimap ====================
 leftpart:: Bimap k v -> Map.Map k v
 leftpart(MkBimap left right) = left
 
@@ -170,7 +196,6 @@ rightpart:: Bimap k v -> Map.Map v k
 rightpart(MkBimap left right) = right
 
 instance Iter Bimap where
-  x `element` m =  when (Map.member x (leftpart m))
   nxt m = Collect (\ ans f ->
      case Map.minViewWithKey (leftpart m) of
         Nothing -> ans
@@ -180,141 +205,159 @@ instance Iter Bimap where
        (_left,Just v,right) -> f (key,v,MkBimap right (rightpart m)) ans
        (_left,Nothing,Tip) -> ans
        (_left,Nothing,right) -> f (k,v,MkBimap m3 (rightpart m)) ans
-           where ((k,v),m3) = Map.deleteFindMin right)
-  haskey x m = case Map.lookup x (leftpart m) of Just _ -> True; Nothing -> False
+           where ((k,v),m3) = Map.deleteFindMin right )
+  haskey x (MkBimap left right) = case Map.lookup x left of { Just _ -> True; Nothing -> False }
+  isnull (MkBimap f g) = isnull f
+  repOf x = BimapR
+
+
+  lookup x (MkBimap left right) = Map.lookup x left
   addpair = undefined -- Core.addpair
   removekey key m = error("removekey for Bimap requires (Ord val) as well as (Ord key)")
-  empty (MkBimap f g) = empty f
 
+-- =============================================================================================
+-- Now we look at instances for Compound type that combine simple iterators. Such a compound
+-- instances will call the Iter methods of its constituent types to build its compound methods.
+-- =============================================================================================
 
--- ==============================================================
--- Combining Type (Iter f) types to new ones
+-- ================= Compound And ================
 
+andLoop ::
+  (Ord key, Iter f1, Iter f2) =>
+  (key, b1, f1 key b1) ->
+  (key, b2, f2 key b2) ->
+  Collect (key, (b1, b2), And key (b1,b2))
 
-
-andLoop :: (Ord a, Iter f1, Iter f2) =>
-            (f1 a b1 -> f2 a b2 -> c) ->
-            (a, b1, f1 a b1) ->
-            (a, b2, f2 a b2) ->
-            Collect (a, (b1, b2), c)
-andLoop combine (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) =
+andLoop (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) =
    case compare k1 k2 of
-      EQ -> one (k1,(v1,v2),combine f1 g2)
-      LT -> do { ftrip' <- lub k2 f1; andLoop combine ftrip' gtrip  }
-      GT -> do { gtrip' <- lub k1 g2; andLoop combine ftrip gtrip' }
+      EQ -> one (k1,(v1,v2), And f1 g2)
+      LT -> do { ftrip' <- lub k2 f1; andLoop ftrip' gtrip  }
+      GT -> do { gtrip' <- lub k1 g2; andLoop ftrip gtrip' }
 
-instance Iter And2 where
-   nxt (And2x f g) =
-      do { triple1 <- nxt f; triple2 <- nxt g; andLoop And2x triple1 triple2 }
-   lub  key (And2x f g) =
-      do { triple1 <- lub key f; triple2 <- lub key g; andLoop And2x triple1 triple2 }
-   element k (And2x f g) = do { k `element` f; k `element` g; one () }
-   haskey k (And2x f g) = haskey k f && haskey k g
-   addpair k v (And2x f g) = And2x (addpair k (fst v) f) (addpair k (snd v) g)
-   removekey k (And2x f g) = And2x (removekey k f) g
-   empty (And2x f g) = empty f  ||  empty g
+instance Iter And where
+   nxt (And f g) = do { triple1 <- nxt f; triple2 <- nxt g; andLoop triple1 triple2 }
+   lub  key (And f g) = do { triple1 <- lub key f; triple2 <- lub key g; andLoop triple1 triple2 }
+   haskey k (And f g) = haskey k f && haskey k g
+   isnull (And f g) = isnull f  ||  isnull g
+   repOf (And f g) = AndR (repOf f) (repOf g)
 
--- =============================================================================
+   lookup k (x@(And f g)) = if haskey k x then Just(fromJust(lookup k f), fromJust(lookup k g)) else Nothing
+   addpair k v (And f g) = And (addpair k (fst v) f) (addpair k (snd v) g)
+   removekey k (And f g) = And (removekey k f) g
 
+-- ================= Compound Or =====================
 
-orAction :: (Iter f, Iter g, Ord k) =>
-            (forall h b . Iter h => h k b -> Collect(k,b,h k b)) ->
-            f k v -> g k v ->
-            Collect (k, [v], Or2 k [v])
-orAction next f g | empty g =
-   do (k1,v1,h1) <- next f
-      one (k1,[v1],Or2x h1 g)
-orAction next f g | empty f =
-   do (k1,v1,h1) <- next g
-      one (k1,[v1],Or2x f h1)
-orAction next f g =
+-- A type synonym for the type of 'nxt' and a partially applied 'lub key'.
+-- We will use this pattern, of passing the next `advancer` as a parameter, quite often.
+
+type NxtOrLub k = (forall h b . Iter h => h k b -> Collect(k,b,h k b))
+
+orAction ::
+   (Iter f, Iter g, Ord k) =>
+   NxtOrLub k ->
+   f k v -> g k v -> Fun (v -> v -> v) ->
+   Collect (k, v, Or k v)
+
+orAction next f g comb | isnull g = do { (k1,v1,h1) <- next f; one (k1,v1,Or h1 g comb)}
+orAction next f g comb | isnull f = do { (k1,v1,h1) <- next g; one (k1,v1,Or f h1 comb)}
+orAction next f g comb =
    do (ftrip@(k1,v1,f1)) <- next f
       (gtrip@(k2,v2,g2)) <- next g
       case compare k1 k2 of
-         EQ -> one (k1,[v1,v2],Or2x f1 g2)
-         LT -> one (k1,[v1],Or2x f1 g)
-         GT -> one (k2,[v2],Or2x f g2)
+         EQ -> one (k1,apply comb v1 v2,Or f1 g2 comb)
+         LT -> one (k1,v1,Or f1 g comb)
+         GT -> one (k2,v2,Or f g2 comb)
 
-instance Iter Or2 where
-   nxt (Or2x f g) = orAction nxt f g
-   lub key (Or2x f g) = orAction (lub key) f g
-   haskey k (Or2x f g) = haskey k f ||  haskey k g
-   element k (Or2x f g) = when (not ( isempty (element k f) && isempty(element k g)))
-   addpair k xs (Or2x f g) = Or2x (foldr accum f xs) g  where accum v ans = addpair k v ans
-   removekey k (Or2x f g) = Or2x (removekey k f) (removekey k g)
-   empty (Or2x f g) = empty f &&  empty g
+instance Iter Or where
+   nxt (Or f g comb) = orAction nxt f g comb
+   lub key (Or f g comb) = orAction (lub key) f g comb
+   haskey k (Or f g comb) = haskey k f ||  haskey k g
+   isnull (Or f g comb) = isnull f &&  isnull g
+   repOf (Or f g comb) = OrR (repOf f) (repOf g) comb
 
+   lookup k (Or f g comb) =
+       case (lookup k f,lookup k g) of
+          (Just x,Just y) -> Just(apply comb x y)
+          (Just x,Nothing) -> Just x
+          (Nothing,Just y) -> Just y
+          (Nothing,Nothing) -> Nothing
+   addpair k x (Or f g comb) = Or (addpair k x f) g comb
+   removekey k (Or f g comb) = Or (removekey k f) (removekey k g) comb
 
--- ================================================================
+-- =============== Compound Guard =================
 
-guardAction :: (Iter f, Ord k) =>
-            (forall h b . Iter h => h k b -> Collect(k,b,h k b)) ->
-            (k -> v -> Bool) ->
-            f k v ->
-            Collect (k, v, Guard k v)
+guardAction ::
+   (Iter f, Ord k) =>
+   NxtOrLub k ->
+   Fun (k -> v -> Bool) ->
+   f k v ->
+   Collect (k, v, Guard k v)
+
 guardAction next p f = do { triple <- next f; loop triple }
-   where loop (k,v,f') = if (p k v) then one (k,v,Guardx f' p) else do { triple <- nxt f'; loop triple}
+   where loop (k,v,f') = if (apply p k v) then one (k,v,Guard f' p) else do { triple <- nxt f'; loop triple}
 
 instance Iter Guard where
-   nxt (Guardx f p) = guardAction nxt p f
-   lub key (Guardx f p) = guardAction (lub key) p f
-   element x (Guardx f p)  = do { (y,v,f') <- lub x f; when (x==y && p x v) }
-   haskey key f = nonempty(element key f)
-   addpair k v (old@(Guardx f p)) = if (p k v) then Guardx (addpair k v f) p else old
-   empty (Guardx f p) = empty f
-   removekey key (Guardx f p) = Guardx (removekey key f) p
+   nxt (Guard f p) = guardAction nxt p f
+   lub key (Guard f p) = guardAction (lub key) p f
+   -- haskey relies on lookup
+   isnull (Guard f p) = error ("Can't tell if a guard is null")
+   repOf (Guard f p) = GuardR (repOf f) p
+
+   lookup key (Guard f p) = case lookup key f of { Just v -> if apply p key v then Just v else Nothing; Nothing -> Nothing}
+   addpair k v (old@(Guard f p)) = if (apply p k v) then Guard (addpair k v f) p else old
+   removekey key (Guard f p) = Guard (removekey key f) p
 
 
--- =================================================================
+-- ================= Compound Project ===================
 
-projAction :: (Iter f, Ord k) =>
-            (forall h b . Iter h => h k b -> Collect(k,b,h k b)) ->
-            (k -> v -> u) ->
-            f k v ->
-            Collect (k, u, Project k u)
-projAction next p f = do { triple <- next f; loop triple }
-   where loop (k,v,f') = one (k,p k v,Projectx f' p)
+projAction ::
+   (Iter f, Ord k) =>
+   (forall h b . Iter h => h k b -> Collect(k,b,h k b)) ->
+   Fun (k -> v -> u) ->
+   f k v ->
+   Collect (k, u, Project k u)
+
+projAction next p f = do { (k,v,f') <- next f; one (k,apply p k v,Project f' p) }
 
 instance Iter Project where
-   nxt (Projectx f p) = projAction nxt p f
-   lub key (Projectx f p) = projAction (lub key) p f
-   element x (Projectx f p) = element x f
-   haskey key (Projectx f p) = haskey key f
-   addpair k v (Projectx f p) = error ("can't add a (key,value) pair to a projection view.")
-   empty (Projectx f p) = empty f
-   removekey key (Projectx f p) = Projectx (removekey key f) p
+   nxt (Project f p) = projAction nxt p f
+   lub key (Project f p) = projAction (lub key) p f
+   haskey key (Project f p) = haskey key f
+   isnull (Project f p) = isnull f
+   repOf (Project f p) = ProjectR (repOf f) p
 
--- ================================================================
+   lookup key (Project f p) = case lookup key f of { Just v -> Just(apply p key v); Nothing -> Nothing }
+   addpair k v (Project f p) = error ("can't add a (key,value) pair to a projection view.")
+   removekey key (Project f p) = Project (removekey key f) p
 
-data Diff k v where
-   Diffx :: (Ord k,Iter f,Iter g) => f k v -> g k u -> Diff k v
+-- ================ Compound Diff ======================
 
-diffAction:: (Iter f, Iter g, Ord k) => (k,u,f k u) -> g k v -> Collect (k,u,Diff k u)
+diffAction::
+   (Iter f, Iter g, Ord k) =>
+   (k,u,f k u) ->
+   g k v ->
+   Collect (k,u,Diff k u)
+
+diffAction (k1,u1,f1) g | isnull g = one (k1,u1,Diff f1 g)
 diffAction (t1@(k1,u1,f1)) g = do
    (t2@(k2,u2,g2)) <- lub k1 g
    case compare k1 k2 of
       EQ -> do { tup <- nxt f1; diffAction tup g2 }
-      LT -> one (k1,u1,Diffx f1 g)
-      GT -> one (k1,u1,Diffx f1 g)
+      LT -> one (k1,u1,Diff f1 g)
+      GT -> one (k1,u1,Diff f1 g)
 
 instance Iter Diff where
-   nxt (Diffx f g) = do { trip <- nxt f; diffAction trip g }
-   lub key (Diffx f g) = do { trip <- lub key f; diffAction trip g}
-   element key diff = when (haskey key diff)
-   haskey key (Diffx f g) = haskey key f && (not (haskey key g))
-   addpair k v (Diffx f g) = Diffx (addpair k v f) (removekey k g)
-   removekey key (Diffx f g) = Diffx (removekey key f) g
-   empty (Diffx f g) = error ("empty for Diff is (f `iskeysubset` g)")
+   nxt (Diff f g) = do { trip <- nxt f; diffAction trip g }
+   lub key (Diff f g) = do { trip <- lub key f; diffAction trip g}
+   haskey key (Diff f g) = haskey key f && (not (haskey key g))
+   isnull (Diff f g) = error("Can't tell if a Diff is null.")
+   repOf (Diff f g) = DiffR (repOf f) (repOf g)
 
--- =================================================================
--- An iterator over a single  Iter f => (f k v)
--- This is going to be Linear in time, better to use domEq when we can take advantage of fast matching
+   lookup key (x@(Diff f _)) = if haskey key x then lookup key f else Nothing
+   addpair k v (Diff f g) = Diff (addpair k v f) (removekey k g)
+   removekey key (Diff f g) = Diff (removekey key f) g
 
-lifo :: Iter f => f k v -> Collect (k,v)
-lifo x = do { (k,v,x2) <- nxt x; front (k,v) (lifo x2) }
 
-fifo :: Iter f => f k v -> Collect (k,v)
-fifo x = do { (k,v,x2) <- nxt x; rear (fifo x2) (k,v)}
 
 -- ==================================================================
 -- Now we make an iterator that collects triples, on the intersection
@@ -391,7 +434,7 @@ domEqSlow m n = do
 -- Even better, this will run in time and space proportional to: size((dom skcreds) ∩ (dom delegs))
 -- See the example with timing above.
 
-foo skcreds delegs stpools = materialize Map $
+foo skcreds delegs stpools = materialize MapR $
   do (x,z,y) <- skcreds ⨝ delegs
      y `element` stpools
      one (x,y)
@@ -403,6 +446,21 @@ foo :: (Iter s, Iter d, Iter p, Ord a, Ord b1) =>
        d a b1 ->
        p b1 b3 ->
        Map a b1
+
+
+example :: Exp (Map Int Char)
+example = ((dom stkcred) ◁ deleg) ▷ (dom stpool)
+
+stkcred :: Map Int [Char]
+deleg :: Map Int Char
+stpool :: Map Char Int
+
+stkcred = Map.fromList[(5,"a"),(6,"q"),(12,"r")]
+deleg = Map.fromList [ (n,chars !! n) | n <- [1..10]]
+stpool = Map.fromList [('A',99),('C',12),('F',42),('R',33),('Z',99)]
+
+instance Show (Code k v) where
+  show (Data x) = shape x
 
 -- =====================================================================================
 -- Some times we need to write our own version of functions over Map.Map that
@@ -436,10 +494,10 @@ noKeys m (Bin _ k _ ls rs) = case Map.split k m of
 -- | Given a BaseRep we can materialize a (Collect k v) which has no intrinsic type.
 
 materialize :: (Ord k,Ord v) => BaseRep f k v -> Collect (k,v) -> f k v
-materialize Map x = runCollect x Map.empty (\ (k,v) ans -> Map.insert k v ans)
-materialize Set x = Sett (runCollect x Set.empty (\ (k,_) ans -> Set.insert k ans))
-materialize Bimap x = runCollect x  bimapEmpty (\ (k,v) ans -> Core.addpair k v ans)
-materialize Pair x = runCollect x Fail (\ (k,v) _ignore -> Two k v)
+materialize MapR x = runCollect x Map.empty (\ (k,v) ans -> Map.insert k v ans)
+materialize SetR x = Sett (runCollect x Set.empty (\ (k,_) ans -> Set.insert k ans))
+materialize BimapR x = runCollect x  bimapEmpty (\ (k,v) ans -> Core.addpair k v ans)
+materialize SingleR x = runCollect x Fail (\ (k,v) _ignore -> Single k v)
 materialize other x = error ("Can't materialize compound (Iter f) type: "++show other++". Choose some other BaseRep.")
 
 
@@ -455,35 +513,44 @@ materialize other x = error ("Can't materialize compound (Iter f) type: "++show 
 
 data Code k v where
   Data:: (Ord k,Iter f) => f k v -> Code k v
-  Act:: (Ord k) => Collect (k,v) -> Code k v
+--   Act:: (Ord k) => Collect (k,v) -> Code k v
 
 compile:: Exp (f k v) -> Code k v
 compile (Base rep relation) = Data relation
 
-compile (Dom (Base Set rel)) = Data rel
+compile (Dom (Base SetR rel)) = Data rel
 compile (Dom (Singleton k v)) = Data (Sett (Set.singleton k))
 compile (Dom (SetSingleton k)) = Data (Sett (Set.singleton k))
 compile (Dom x) = case compile x of
-  Data xcode -> Data (Projectx xcode (\ _ y -> ()))
-  Act comp -> Act $ do { (k,v) <- comp; one (k,()) }
+  Data xcode -> Data (Project xcode (fun (Const ())))
 
-compile (Rng (Base Set rel)) = Data (Sett (Set.singleton ()))
+compile (Rng (Base SetR rel)) = Data (Sett (Set.singleton ()))
 compile (Rng (Singleton k v)) = Data (Sett (Set.singleton v))
 compile (Rng (SetSingleton k)) = Data (Sett (Set.singleton ()))
 compile (Rng x) =
-   case compile x of  -- This is going to be expensive, last gasp fallback
-      Data xcode -> Act $ do { (k,v) <- lifo xcode; one (v,())}
-      Act comp -> Act $ do { (k,v) <- comp; one (v,())}
-compile (DRestrict set rel) = case (compile set, compile rel) of
-   (Data setd, Data reld) -> Data (Projectx (And2x setd reld) (\ k (u,v) -> v))
-   (Act comp, Data reld) -> Data (Projectx (And2x setd reld) (\ k (u,v) -> v))
-      where setd = materialize Set comp
-   (Act setc, Act relc) -> Act $ do { (x,u) <- setc; (y,v) <- relc; when (x==y); one (y,v) }
-   (Data setd,Act relc) -> Act $ do { (x,u) <- lifo setd; (y,v) <- relc; when (x==y); one (y,v) }
-compile (DExclude set rel) = case (compile set,compile rel) of
-   -- (Data setd, Data reld) ->
-    (Data setd,Act relc) -> Act $ do { (x,u) <- lifo setd; (y,v) <- relc; when (not(x==y)); one (y,v) }
+   case compile x of  -- This is going to be expensive, last gasp fallback build an index
+      Data xcode -> Data(materialize MapR (do { (_,y) <- lifo xcode; one(y,()) }))
 
+compile (DRestrict set rel) = case (compile set, compile rel) of
+   (Data setd, Data reld) -> Data (Project (And setd reld) (fun RngSnd))
+
+compile (DExclude set rel) = case (compile set,compile rel) of
+   (Data setd, Data reld) -> Data (Diff reld setd)
+
+compile (RRestrict rel set) = case (compile rel,compile set) of
+   (Data reld, Data setd) -> Data (Guard reld (fun (RngElem setd)))
+
+compile (RExclude rel set) = case (compile rel,compile set) of
+   (Data reld, Data setd) -> Data (Guard reld (fun (Negate(RngElem setd))))
+
+compile (UnionLeft rel1 rel2) =  case (compile rel1,compile rel2) of
+   (Data d1, Data d2) -> Data (Or d1 d2 (fun YY))
+
+compile (UnionRight rel1 rel2) =  case (compile rel1,compile rel2) of
+   (Data d1, Data d2) -> Data (Or d1 d2 (fun XX))
+
+compile (UnionPlus rel1 rel2) =  case (compile rel1,compile rel2) of
+   (Data d1, Data d2) -> Data (Or d1 d2 (fun Plus))
 
 compile other = error "No compile yet"
 
@@ -491,29 +558,29 @@ compile other = error "No compile yet"
 eval:: Exp t -> t
 eval (Base rep relation) = relation
 
-eval (Dom (Base Set rel)) = rel
+eval (Dom (Base SetR rel)) = rel
 eval (Dom (Singleton k v)) = Sett (Set.singleton k)
 eval (Dom (SetSingleton k)) = Sett (Set.singleton k)
 
-eval (Rng (Base Set rel)) = Sett (Set.singleton ())
+eval (Rng (Base SetR rel)) = Sett (Set.singleton ())
 eval (Rng (Singleton k v)) = Sett (Set.singleton v)
 eval (Rng (SetSingleton k)) = Sett (Set.singleton ())
 
-eval (DRestrict (Base Set x1) (Base rep x2)) = materialize rep $ do { (x,y,z) <- x1 `domEq` x2; one (x,z) }
+eval (DRestrict (Base SetR x1) (Base rep x2)) = materialize rep $ do { (x,y,z) <- x1 `domEq` x2; one (x,z) }
 eval (DRestrict (Dom (Base _ x1)) (Base rep x2)) = materialize rep $ do { (x,y,z) <- x1 `domEq` x2; one (x,z) }
-eval (DRestrict (SetSingleton k) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (One k) `domEq` x2; one (x,z) }
-eval (DRestrict (Dom (Singleton k _)) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (One k) `domEq` x2; one (x,z) }
-eval (DRestrict (Rng (Singleton _ v)) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (One v) `domEq` x2; one (x,z) }
+eval (DRestrict (SetSingleton k) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (SetSingle k) `domEq` x2; one (x,z) }
+eval (DRestrict (Dom (Singleton k _)) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (SetSingle k) `domEq` x2; one (x,z) }
+eval (DRestrict (Rng (Singleton _ v)) (Base rep x2)) = materialize rep $  do { (x,y,z) <- (SetSingle v) `domEq` x2; one (x,z) }
 
-eval (DExclude (Base Set (Sett x1)) (Base Map x2)) =  Map.withoutKeys x2 x1
-eval (DExclude (Dom (Base Map x1)) (Base Map x2)) = noKeys x2 x1
-eval (DExclude (SetSingleton k) (Base Bimap x)) = Core.removekey k x
-eval (DExclude (Dom (Singleton k _)) (Base Bimap x)) = Core.removekey k x
-eval (DExclude (Rng (Singleton _ v)) (Base Bimap x)) = Core.removekey v x
+eval (DExclude (Base SetR (Sett x1)) (Base MapR x2)) =  Map.withoutKeys x2 x1
+eval (DExclude (Dom (Base MapR x1)) (Base MapR x2)) = noKeys x2 x1
+eval (DExclude (SetSingleton k) (Base BimapR x)) = Core.removekey k x
+eval (DExclude (Dom (Singleton k _)) (Base BimapR x)) = Core.removekey k x
+eval (DExclude (Rng (Singleton _ v)) (Base BimapR x)) = Core.removekey v x
 
-eval (RExclude (Base Bimap x) (SetSingleton k)) = Core.removeval k x
-eval (RExclude (Base Bimap x) (Dom (Singleton k v))) = Core.removeval k x
-eval (RExclude (Base Bimap x) (Rng (Singleton k v))) = Core.removeval v x
+eval (RExclude (Base BimapR x) (SetSingleton k)) = Core.removeval k x
+eval (RExclude (Base BimapR x) (Dom (Singleton k v))) = Core.removeval k x
+eval (RExclude (Base BimapR x) (Rng (Singleton k v))) = Core.removeval v x
 eval (RExclude (Base rep lhs) y) =
    materialize rep $ do { (a,b) <- lifo lhs; (c,_) <- lifo rhs; when (not(b==c)); one (a,b)} where rhs = eval y
 
@@ -536,9 +603,9 @@ eval (NotElem k (SetSingleton key)) = not $ k==key
 
 eval (UnionLeft (Base rep x) (Singleton k v)) = addpair k v x
 eval (UnionRight (Base rep x) (Singleton k v)) = addpair k v x   --TODO MIght not have the right parity
-eval (UnionPlus (Base Map x) (Base Map y)) = Map.unionWith (+) x y
+eval (UnionPlus (Base MapR x) (Base MapR y)) = Map.unionWith (+) x y
 
-eval (Singleton k v) = Two k v
+eval (Singleton k v) = Single k v
 eval (SetSingleton k) = Sett (Set.singleton k)
 
 eval other = error ("Can't eval: "++show other++" yet.")
@@ -559,7 +626,7 @@ ex3 = m0 ∪ (singleton 3 'b')
 ex4,ex5,ex6 :: Exp(Map Int Char)
 ex4 = (setSingleton 2) ⋪ m0
 ex5 = dom(singleton 2 'z') ⋪ m0
-ex6 = rng(singleton 'z' 2) ⋪ m0
+ex6 = range(singleton 'z' 2) ⋪ m0
 
 ex7::Exp Bool
 ex7 = 70 ∉ (dom m1)
