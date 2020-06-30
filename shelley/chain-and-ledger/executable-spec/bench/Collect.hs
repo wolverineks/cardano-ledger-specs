@@ -137,6 +137,9 @@ isempty col = runCollect col True (\ t a -> False)
 nonempty:: Collect t -> Bool
 nonempty col = runCollect col False (\ t a -> True)
 
+hasElem :: Collect t -> Maybe t
+hasElem col = runCollect col Nothing (\ t _ -> Just t)
+
 -- | Even though a (Collect t) is a function, if we can (Show t), we can pick an action
 -- that collects all the shown t, and turn them into a big multi-line string.
 

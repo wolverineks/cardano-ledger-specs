@@ -5,12 +5,12 @@
 {-# LANGUAGE GADTs, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, FunctionalDependencies  #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric           #-}
 
 
 module SetAlgebra where
 
 import Prelude hiding(lookup)
-import Shelley.Spec.Ledger.Core(Bimap(..),bimapFromList, bimapEmpty)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict(Map)
 import qualified Data.Set as Set
@@ -22,10 +22,11 @@ import Collect
 data BaseRep f k v where
    MapR:: BaseRep Map.Map k v
    SetR:: BaseRep Sett k ()
+   ListR:: BaseRep List k v
    SingleR:: BaseRep Single k v
-   BimapR:: BaseRep Bimap k v
+   BiMapR:: BaseRep (BiMap v) k v
    AndR:: BaseRep f k u -> BaseRep g k v -> BaseRep And k (u,v)
-   AndPR:: BaseRep f k u -> BaseRep g k v -> (u -> v -> w) -> BaseRep (AndP f g) k w
+   AndPR:: BaseRep f k u -> BaseRep g k v -> Fun(u -> v -> w) -> BaseRep AndP k w
    DiffR:: BaseRep f k u -> BaseRep g k v -> BaseRep Diff k u
    OrR:: BaseRep f k v -> BaseRep g k v -> Fun(v -> v -> v) -> BaseRep Or k v
    ProjectR:: BaseRep f k v -> Fun (k -> v -> u) -> BaseRep Project k u
@@ -40,32 +41,56 @@ data BaseRep f k v where
 -- lub can skip over many items in sub-linear time, it can make things really fast.
 -- Many finite maps can support a support lub operation. Some examples:
 -- Balanced binary trees, Arrays (using binary search), Tries, etc.
--- Their are basic and compound Iter instances. Compound types include components
+-- There are basic and compound Iter instances. Compound types include components
 -- with types that have Iter instances.
 
 class Iter f where
   nxt:: f a b -> Collect (a,b,f a b)
   lub :: Ord a => a -> f a b -> Collect (a,b,f a b)
-
-  haskey:: Ord key => key -> f key b -> Bool
-  haskey k x = case lookup k x of {Just _ -> True; Nothing -> False}
-  isnull:: f k v -> Bool
   repOf :: f a b -> BaseRep f a b
 
+  -- The next few methods can all be defined via nxt and lub, but for base types
+  -- there are often much more efficent means, so the default definitions should be
+  -- overwritten. For compound types with Guards, these are often the only way to define them.
+
+  hasNxt :: f a b -> Maybe(a,b,f a b)
+  hasNxt f = hasElem (nxt f)
+  hasLub :: Ord a => a -> f a b -> Maybe(a,b,f a b)
+  hasLub a f = hasElem (lub a f)
+  haskey:: Ord key => key -> f key b -> Bool
+  haskey k x = case hasLub k x of { Nothing -> False; Just (key,_,_) -> k==key}
+  isnull:: f k v -> Bool
+  isnull f = isempty(nxt f)
   lookup:: Ord key => key -> f key rng -> Maybe rng
-  addpair:: (Ord k) => k -> v -> f k v -> f k v
-  removekey:: (Ord k) => k -> f k v -> f k v
+  lookup k x = case hasLub k x of { Nothing -> Nothing; Just (key,v,_) -> if k==key then Just v else Nothing}
   element :: (Ord k) => k -> f k v -> Collect ()
   element k f = when (haskey k f)
 
-class Iter f => HasNull f where
-   nullary:: f k v -> Bool
+  addpair:: (Ord k) => k -> v -> f k v -> f k v
+  addpair k v f = addkv (k,v) f (\ a b -> a)
+  addkv :: Ord k => (k,v) -> f k v -> (v -> v -> v) -> f k v
+  removekey:: (Ord k) => k -> f k v -> f k v
+  emptyc:: Ord k => f k v
+  emptyc = error ("emptyc only works on some types.")
+
+-- =========================================================================
+-- The most basic operation of iteration, where (Iter f) is to use the 'nxt'
+-- operator on (f k v) to create a collection (Collect k v). The two possible
+-- ways to produce their elements are in LIFO or FIFO order.
+
+lifo :: Iter f => f k v -> Collect (k,v)
+lifo x = do { (k,v,x2) <- nxt x; front (k,v) (lifo x2) }
+
+fifo :: Iter f => f k v -> Collect (k,v)
+fifo x = do { (k,v,x2) <- nxt x; rear (fifo x2) (k,v)}
+
 
 -- =================================================================
--- Primitive types that we will make instances of Iter
+-- Primitive types (f k v) that we will make instances of (Iter f')
+-- Also a few we just import: Data.Map.Strict.Map and Data.Set.Set
 -- ==================================================================
 
--- One type that can be iterated over (in order) and hence collected
+-- The Single type that can be iterated over (in order) and hence collected
 -- Of course the iteration is trivial as there are only 0 or 1 pairs.
 
 data Single k v where
@@ -73,7 +98,55 @@ data Single k v where
   Fail :: Single k v
   SetSingle :: k -> Single k ()
 
+instance (Show k,Show v) => Show (Single k v) where
+  show (Single k v) = "(Single "++show k ++ " "++show v++")"
+  show (SetSingle k) = "(SetSingle "++show k++")"
+  show Fail = "Fail"
+
+-- Data.Set where we fix the value to be ()
+
 data Sett k v where Sett :: (Set.Set k) -> Sett k ()
+
+-- Lists of pairs with (1) the sorted assumption, and (2) there is only one v for each k.
+
+data List k v where
+   List :: Ord k => [(k,v)]  -> List k v
+
+
+-- For Bijections we define (BiMap v k v).  Reasons we can't use (Data.Bimap k v)
+-- 1) We need to enforce that the second argument `v` is in the Ord class, when making it an Iter instance.
+-- 2) The constructor MkBimap is not exported, so we can't roll our own operations necessary to get good asymptotic performance
+-- 3) Missing operation 'restrictkeys' and 'withoutkeys' make performant versions of operations  ◁ ⋪ ▷ ⋫ hard.
+-- 4) Missing operation 'union', make performant versions of ∪ and ⨃ hard.
+
+data BiMap v a b where MkBiMap:: (v ~ b) => !(Map.Map a b) -> !(Map.Map b a) -> BiMap v a b
+                                --  ^   the 1st and 3rd parameter must be the same:   ^   ^
+
+biMapEmpty :: BiMap v k v
+biMapEmpty = MkBiMap Map.empty Map.empty
+
+biMapFromList:: (Ord k,Ord v) => [(k,v)] -> BiMap v k v
+biMapFromList xs = foldr (\ (k,v) ans -> biMapAddpair k v ans) biMapEmpty xs
+
+-- This synonym makes (BiMap v k v) appear as an ordinary Binary type contractor: (Bimap k v)
+type Bimap k v = BiMap v k v
+
+biMapAddpair :: (Ord a, Ord k) => a -> k -> BiMap k a k -> BiMap k a k
+biMapAddpair k y (MkBiMap m1 m2) = MkBiMap (Map.insertWith (\x _y -> x) k y m1)  (Map.insertWith (\x _y -> x) y k m2)
+
+biMapRemovekey :: (Ord a, Ord k) => a -> BiMap k a k -> BiMap k a k
+biMapRemovekey k (m@(MkBiMap m1 m2)) =
+     case Map.lookup k m1 of
+        Just v -> MkBiMap (Map.delete k m1) (Map.delete v m2)
+        Nothing -> m
+
+-- This operation is very fast (Log n) on BiMap, but extremely slow on other collections.
+removeval:: (Ord k, Ord v) => v -> BiMap v k v -> BiMap v k v
+removeval v (m@(MkBiMap m1 m2)) =
+     case Map.lookup v m2 of
+        Just k -> MkBiMap (Map.delete k m1) (Map.delete v m2)
+        Nothing -> m
+
 
 -- ================== Compound data definitions ======================
 -- Compound types we will make instances of Iter
@@ -94,8 +167,8 @@ data Guard k v where
 data Diff k v where
    Diff :: (Ord k,Iter f,Iter g) => f k v -> g k u -> Diff k v
 
-data AndP f g k v where
-   AndP:: (Ord k,Iter f,Iter g) => f k v -> g k u -> (v -> u -> w) -> AndP f g k w
+data AndP k v where
+   AndP:: (Ord k,Iter f,Iter g) => f k v -> g k u -> Fun(v -> u -> w) -> AndP k w
 
 -- ================================================================================================
 -- | The self typed Exp GADT, that encodes the shape of Set expressions. A deep embedding.
@@ -133,14 +206,17 @@ instance Basic (Exp t) t where
 instance (Iter Map,Ord k,Ord v) => Basic (Map k v) (Map k v) where
   toExp x = Base MapR x
 
-instance (Iter Sett,Ord k) => Basic (Sett k ()) (Sett k ()) where
-  toExp x = Base SetR x
+instance (Iter Sett,Ord k) => Basic (Set.Set k) (Sett k ()) where
+  toExp x = Base SetR (Sett x)
+
+-- instance (Iter List,Ord k) => Basic [(k,v)] (List k v) where
+--  toExp x = Base ListR (List x)
 
 instance (Iter Single, Ord k,Ord v) => Basic (Single k v) (Single k v) where
   toExp x = Base SingleR x
 
-instance (Iter Bimap, Ord k,Ord v) => Basic (Bimap k v) (Bimap k v) where
-  toExp x = Base BimapR x
+instance (Iter (BiMap v), Ord k,Ord v) => Basic (Bimap k v) (Bimap k v) where
+  toExp x = Base BiMapR x
 
 
 -- ==========================================================================================
@@ -217,6 +293,9 @@ data SymFun x y ans where
   RngElem:: (Ord rng,Iter f) => f rng v ->  SymFun dom rng Bool  -- (\ x y -> haskey y frngv)  -- x is ignored and frngv is supplied
   DomElem:: (Ord dom,Iter f) => f dom v -> SymFun dom rng Bool   -- (\ x y -> haskey x fdomv)  -- y is ignored and fdomv is supplied
   Comp :: SymFun k b c -> SymFun k a b -> SymFun k a c
+  Cat :: SymFun String String String
+  Len :: Foldable t => SymFun a (t b) Int
+  Lift:: String -> (a -> b -> c) -> SymFun a b c
 
 
 showSF :: SymFun a b c -> String -> String -> String
@@ -231,6 +310,9 @@ showSF (Negate f) x y = "(not "++(showSF f x y)++")"
 showSF (DomElem dset) x y = "(haskey "++x++" ?)"
 showSF (RngElem dset) x y = "(haskey "++y++" ?)"
 showSF (Comp f g) x y = showSF f x (showSF g x y)
+showSF Cat x y = "("++x++" ++ "++y++")"
+showSF Len x y = "(len "++y++")"
+showSF (Lift nm f) x y = "("++nm++" "++x++" "++y++")"
 
 mean:: SymFun a b c -> (a -> b -> c)
 mean XX = \ x y -> x
@@ -247,6 +329,9 @@ mean (Negate f) = \ x y -> not(fm x y)
 mean (Comp f g) = \ x y -> fm x (gm x y)
   where fm = mean f
         gm = mean g
+mean Cat = \ x y -> x ++ "-" ++ y
+mean Len = \ x y -> length y
+mean (Lift nm f) = f
 
 data Fun x where
    Fun:: (SymFun x y ans) -> (x -> y -> ans) -> Fun (x -> y -> ans)
@@ -270,10 +355,11 @@ instance Show (SymFun a b c) where
 instance Show (BaseRep f k v) where
   show MapR = "Map"
   show SetR = "Set"
+  show ListR = "List"
   show SingleR = "Single"
-  show BimapR = "Bimap"
+  show BiMapR = "BiMap"
   show (AndR x y) = "(And "++show x++" "++show y++")"
-  show (AndPR x y p) = "(AndP "++show x++" "++show y++")"
+  show (AndPR x y p) = "(AndP "++show x++" "++show y++" "++show p++")"
   show (OrR x y p) =  "(Or "++show x++" "++show y++" "++show p++")"
   show (DiffR x y) = "(Diff "++show x++" "++show y++")"
   show (ProjectR x p) = "(Project "++show x++" "++show p++")"
