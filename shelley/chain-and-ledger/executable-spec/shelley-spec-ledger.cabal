@@ -238,6 +238,9 @@ benchmark mainbench
                     Test.Shelley.Spec.Ledger.Utils,
                     Test.Cardano.Crypto.VRF.Fake
                     IterK
+                    Collect
+                    SetAlgebra
+                    IterTests
   build-depends:    base,
                     shelley-spec-ledger,
                     cardano-binary,
