@@ -263,7 +263,8 @@ benchmark mainbench
                     containers,
                     MonadRandom,
                     deepseq,
-                    HUnit
+                    HUnit,
+                    ansi-wl-pprint
   ghc-options:
       -threaded
       -rtsopts

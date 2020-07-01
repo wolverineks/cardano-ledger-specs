@@ -14,6 +14,7 @@ import Prelude hiding(lookup)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict(Map)
 import qualified Data.Set as Set
+import Data.List(sortBy)
 import Collect
 
 -- ===============================================================================================
@@ -24,9 +25,10 @@ data BaseRep f k v where
    SetR:: BaseRep Sett k ()
    ListR:: BaseRep List k v
    SingleR:: BaseRep Single k v
-   BiMapR:: BaseRep (BiMap v) k v
+   BiMapR:: Ord v => BaseRep (BiMap v) k v
    AndR:: BaseRep f k u -> BaseRep g k v -> BaseRep And k (u,v)
-   AndPR:: BaseRep f k u -> BaseRep g k v -> Fun(u -> v -> w) -> BaseRep AndP k w
+   ChainR:: BaseRep f k v -> BaseRep g v w -> Fun(k -> (v,w) -> u) -> BaseRep Chain k u
+   AndPR:: BaseRep f k u -> BaseRep g k v -> Fun(k -> (u,v) -> w) -> BaseRep AndP k w
    DiffR:: BaseRep f k u -> BaseRep g k v -> BaseRep Diff k u
    OrR:: BaseRep f k v -> BaseRep g k v -> Fun(v -> v -> v) -> BaseRep Or k v
    ProjectR:: BaseRep f k v -> Fun (k -> v -> u) -> BaseRep Project k u
@@ -46,7 +48,7 @@ data BaseRep f k v where
 
 class Iter f where
   nxt:: f a b -> Collect (a,b,f a b)
-  lub :: Ord a => a -> f a b -> Collect (a,b,f a b)
+  lub :: Ord k => k -> f k b -> Collect (k,b,f k b)
   repOf :: f a b -> BaseRep f a b
 
   -- The next few methods can all be defined via nxt and lub, but for base types
@@ -55,7 +57,7 @@ class Iter f where
 
   hasNxt :: f a b -> Maybe(a,b,f a b)
   hasNxt f = hasElem (nxt f)
-  hasLub :: Ord a => a -> f a b -> Maybe(a,b,f a b)
+  hasLub :: Ord k => k -> f k b -> Maybe(k,b,f k b)
   hasLub a f = hasElem (lub a f)
   haskey:: Ord key => key -> f key b -> Bool
   haskey k x = case hasLub k x of { Nothing -> False; Just (key,_,_) -> k==key}
@@ -131,10 +133,10 @@ biMapFromList xs = foldr (\ (k,v) ans -> biMapAddpair k v ans) biMapEmpty xs
 -- This synonym makes (BiMap v k v) appear as an ordinary Binary type contractor: (Bimap k v)
 type Bimap k v = BiMap v k v
 
-biMapAddpair :: (Ord a, Ord k) => a -> k -> BiMap k a k -> BiMap k a k
+biMapAddpair :: (Ord v, Ord k) => k -> v -> BiMap v k v -> BiMap v k v
 biMapAddpair k y (MkBiMap m1 m2) = MkBiMap (Map.insertWith (\x _y -> x) k y m1)  (Map.insertWith (\x _y -> x) y k m2)
 
-biMapRemovekey :: (Ord a, Ord k) => a -> BiMap k a k -> BiMap k a k
+biMapRemovekey :: (Ord k, Ord v) => k -> BiMap v k v -> BiMap v k v
 biMapRemovekey k (m@(MkBiMap m1 m2)) =
      case Map.lookup k m1 of
         Just v -> MkBiMap (Map.delete k m1) (Map.delete v m2)
@@ -158,6 +160,9 @@ data Project k v where
 data And k t where
      And :: (Ord k,Iter f, Iter g) => f k v1 -> g k v2 -> And k (v1,v2)
 
+data Chain k t where
+    Chain:: (Ord k,Iter f,Ord v,Iter g) => f k v -> g v w -> Fun(k -> (v,w) -> u) -> Chain k u
+
 data Or k t where
      Or :: (Ord k,Iter f, Iter g) => f k v -> g k v -> Fun(v -> v -> v) -> Or k v
 
@@ -168,26 +173,27 @@ data Diff k v where
    Diff :: (Ord k,Iter f,Iter g) => f k v -> g k u -> Diff k v
 
 data AndP k v where
-   AndP:: (Ord k,Iter f,Iter g) => f k v -> g k u -> Fun(v -> u -> w) -> AndP k w
+   AndP:: (Ord k,Iter f,Iter g) => f k v -> g k u -> Fun(k -> (v,u) -> w) -> AndP k w
+
 
 -- ================================================================================================
 -- | The self typed Exp GADT, that encodes the shape of Set expressions. A deep embedding.
 
 data Exp t where
-   Base:: (Ord k,Ord v,Iter f) => BaseRep f k v -> f k v -> Exp (f k v)
+   Base:: (Ord k,Iter f) => BaseRep f k v -> f k v -> Exp (f k v)
    Dom:: Exp (f k v) -> Exp (Sett k ())
    Rng:: Ord v => Exp (f k v) -> Exp (Sett v ())
-   DRestrict:: Exp (Sett k ()) -> Exp (f k v) -> Exp (f k v)
-   DExclude::  Exp (Sett k ()) -> Exp (f k v) -> Exp (f k v)
-   RRestrict:: Ord v => Exp (f k v) -> Exp (Sett v ()) -> Exp (f k v)
-   RExclude:: Ord v => Exp (f k v) -> Exp (Sett v ()) -> Exp (f k v)
-   Elem :: Show k => k -> Exp(Sett k ()) -> Exp Bool
-   NotElem :: Show k => k -> Exp(Sett k ()) -> Exp Bool
+   DRestrict:: Iter g => Exp (g k ()) -> Exp (f k v) -> Exp (f k v)
+   DExclude::  Iter g => Exp (g k ()) -> Exp (f k v) -> Exp (f k v)
+   RRestrict:: (Iter g,Ord v) => Exp (f k v) -> Exp (g v ()) -> Exp (f k v)
+   RExclude:: (Iter g,Ord v) => Exp (f k v) -> Exp (g v ()) -> Exp (f k v)
+   Elem :: (Iter g,Show k) => k -> Exp(g k ()) -> Exp Bool
+   NotElem ::(Iter g, Show k) => k -> Exp(g k ()) -> Exp Bool
    UnionLeft:: Exp (f k v) -> Exp (g k v) -> Exp(f k v)
    UnionPlus:: Num n => Exp (f k n) -> Exp (f k n) -> Exp(f k n)
    UnionRight:: Exp (f k v) -> Exp (f k v) -> Exp(f k v)
-   Singleton:: (Show k,Ord k,Ord v,Show v) => k -> v -> Exp(Single k v)
-   SetSingleton:: (Show k,Ord k) => k -> Exp(Sett k ())
+   Singleton:: (Show k,Ord k,Show v) => k -> v -> Exp(Single k v)
+   SetSingleton:: (Show k,Ord k) => k -> Exp(Single k ())
 
 
 -- =================================================================
@@ -203,16 +209,16 @@ class Basic s t | s -> t where
 instance Basic (Exp t) t where
   toExp x = x
 
-instance (Iter Map,Ord k,Ord v) => Basic (Map k v) (Map k v) where
+instance (Iter Map,Ord k) => Basic (Map k v) (Map k v) where
   toExp x = Base MapR x
 
 instance (Iter Sett,Ord k) => Basic (Set.Set k) (Sett k ()) where
   toExp x = Base SetR (Sett x)
 
--- instance (Iter List,Ord k) => Basic [(k,v)] (List k v) where
---  toExp x = Base ListR (List x)
+instance  (Iter List,Ord k) => Basic [(k,v)] (List k v) where
+  toExp l = Base ListR (List (sortBy (\ x y -> compare (fst x) (fst y)) l))
 
-instance (Iter Single, Ord k,Ord v) => Basic (Single k v) (Single k v) where
+instance (Iter Single, Ord k) => Basic (Single k v) (Single k v) where
   toExp x = Base SingleR x
 
 instance (Iter (BiMap v), Ord k,Ord v) => Basic (Bimap k v) (Bimap k v) where
@@ -228,28 +234,28 @@ dom x = Dom (toExp x)
 range:: Ord v => Basic s (f k v) => s -> Exp (Sett v ())
 range x = Rng(toExp x)
 
-(◁),(<|),drestrict :: (Basic s1 (Sett k ()), Basic s2 (f k v)) => s1 -> s2 -> Exp (f k v)
+(◁),(<|),drestrict ::  (Iter g, Basic s1 (g k ()), Basic s2 (f k v)) => s1 -> s2 -> Exp (f k v)
 (◁) x y = DRestrict (toExp x) (toExp y)
 drestrict = (◁)
 (<|) = drestrict
 
-(⋪),dexclude :: (Basic s1 (Sett k ()), Basic s2 (f k v)) =>  s1 -> s2 -> Exp (f k v)
+(⋪),dexclude :: (Iter g, Basic s1 (g k ()), Basic s2 (f k v)) => s1 -> s2 -> Exp (f k v)
 (⋪) x y = DExclude (toExp x) (toExp y)
 dexclude = (⋪)
 
-(▷),(|>),rrestrict :: (Ord v,Basic s1 (f k v), Basic s2 (Sett v ())) => s1 -> s2 -> Exp (f k v)
+(▷),(|>),rrestrict :: (Iter g, Ord v, Basic s1 (f k v), Basic s2 (g v ())) => s1 -> s2 -> Exp (f k v)
 (▷) x y = RRestrict (toExp x) (toExp y)
 rrestrict = (▷)
 (|>) = (▷)
 
-(⋫),rexclude :: (Ord v,Basic s1 (f k v), Basic s2 (Sett v ())) => s1 -> s2 -> Exp (f k v)
+(⋫),rexclude :: (Iter g, Ord v, Basic s1 (f k v), Basic s2 (g v ())) => s1 -> s2 -> Exp (f k v)
 (⋫) x y = RExclude (toExp x) (toExp y)
 rexclude = (⋫)
 
-(∈) :: (Show k, Basic s (Sett k ())) => k -> s -> Exp Bool
+(∈) :: (Show k, Iter g,Basic s (g k ())) => k -> s -> Exp Bool
 (∈) x y = Elem x (toExp y)
 
-(∉),notelem :: (Show k, Basic s (Sett k ())) => k -> s -> Exp Bool
+(∉),notelem :: (Show k, Iter g, Basic s (g k ())) => k -> s -> Exp Bool
 (∉) x y = NotElem x (toExp y)
 notelem = (∉)
 
@@ -265,10 +271,10 @@ unionright = (⨃)
 (∪+) x y = UnionPlus (toExp x) (toExp y)
 unionplus = (∪+)
 
-singleton :: (Ord k, Show k, Ord v,Show v) => k -> v -> Exp (Single k v)
+singleton :: (Ord k, Show k,Show v) => k -> v -> Exp (Single k v)
 singleton k v = Singleton k v
 
-setSingleton :: (Show k, Ord k) => k -> Exp (Sett k ())
+setSingleton :: (Show k, Ord k) => k -> Exp (Single k ())
 setSingleton k = SetSingleton k
 
 
@@ -282,30 +288,54 @@ setSingleton k = SetSingleton k
 -- ========================================================================================
 
 data SymFun x y ans where
-  XX:: SymFun a b a                                              -- (\ x y -> x)
-  YY:: SymFun a b b                                              -- (\ x y -> y)
-  Equate :: Eq a => SymFun a a Bool                              -- (\ x y -> x==y)
-  Plus :: Num a => SymFun a a a                                  -- (\ x y -> x==y)
-  Const:: Show a => a -> SymFun x y a                            -- (\ x y -> ())
-  RngFst:: SymFun x (a,b) a                                      -- (\ x y -> fst y)
-  RngSnd:: SymFun x (a,b) b                                      -- (\ x y -> snd y)
-  Negate:: SymFun k v Bool -> SymFun k v Bool                    -- (\ x y -> not(f x y))
-  RngElem:: (Ord rng,Iter f) => f rng v ->  SymFun dom rng Bool  -- (\ x y -> haskey y frngv)  -- x is ignored and frngv is supplied
-  DomElem:: (Ord dom,Iter f) => f dom v -> SymFun dom rng Bool   -- (\ x y -> haskey x fdomv)  -- y is ignored and fdomv is supplied
-  Comp :: SymFun k b c -> SymFun k a b -> SymFun k a c
+  XX:: SymFun a b a                                                -- (\ x y -> x)
+  YY:: SymFun a b b                                                -- (\ x y -> y)
+  Fst:: SymFun a (b,c) b                                           -- (\ x (a,b) -> a)
+  Snd:: SymFun a (b,c) c                                           -- (\ x (a,b) -> b)
+  Equate :: Eq a => SymFun a a Bool                                -- (\ x y -> x==y)
+  Plus :: Num a => SymFun a a a                                    -- (\ x y -> x==y)
+  Const:: Show a => a -> SymFun x y a                              -- (\ x y -> ())
+  RngFst:: SymFun x (a,b) a                                        -- (\ x y -> fst y)
+  RngSnd:: SymFun x (a,b) b                                        -- (\ x y -> snd y)
+  Negate:: SymFun k v Bool -> SymFun k v Bool                      -- (\ x y -> not(f x y))
+  RngElem:: (Ord rng,Iter f) => f rng v ->  SymFun dom rng Bool    -- (\ x y -> haskey y frngv)  -- x is ignored and frngv is supplied
+  DomElem:: (Ord dom,Iter f) => f dom v -> SymFun dom rng Bool     -- (\ x y -> haskey x fdomv)  -- y is ignored and fdomv is supplied
+  Comp :: SymFun k b c -> SymFun k a b -> SymFun k a c             -- (Comp f g) = \ x y -> fm x (gm x y)
+  CompSndL:: SymFun k (a,b) c -> SymFun k d a -> SymFun k (d,b) c  -- (ComSndL f g) = \ x (a,b) -> mf x (mg x a,b)
+  CompSndR:: SymFun k (a,b) c -> SymFun k d b -> SymFun k (a,d) c  -- (comSndR f g) = \ x (a,b) -> mf x (a,mg x b)
+  CompCurryR :: SymFun k (a,b) d ->
+                SymFun a c b ->
+                SymFun k (a,c) d                                    -- (compCurry f g) = \ x (a,b) -> f x(a,g a b)
   Cat :: SymFun String String String
   Len :: Foldable t => SymFun a (t b) Int
   Lift:: String -> (a -> b -> c) -> SymFun a b c
 
 
+splitString :: [Char] -> ([Char], [Char])
+splitString y = ("(fst "++y++")","(snd "++y++")")
+
+showSFP :: SymFun a (b,c) d -> String -> (String,String) -> String
+showSFP Fst k (x,y) = x
+showSFP Snd k (x,y) = y
+showSFP RngFst k (x,y) = x
+showSFP RngSnd k (x,y) = y
+showSFP (CompSndL f g) k (x,y) = showSFP f k (showSF g k x,y)
+showSFP (CompSndR f g) k (x,y) = showSFP f k (x,showSF g k y)
+showSFP XX k (x,y) = k
+showSFP YY k (x,y) = "("++x++","++y++")"
+showSFP (CompCurryR f g) k (x,y) = showSFP f k (x,showSF g x y)
+showSFP other k (x,y) = error ("SFP unreachable: "++show other)
+
 showSF :: SymFun a b c -> String -> String -> String
 showSF XX x y = x
 showSF YY x y = y
+showSF Fst x y = showSFP Fst x (splitString y)
+showSF Snd x y = showSFP Fst x (splitString y)
 showSF Equate x y = "("++x++" == "++y++")"
 showSF Plus x y = "("++x++" + "++y++")"
-showSF (Const c) x y = show c
-showSF RngFst x y = "(fst "++y++")"
-showSF RngSnd x y = "(snd "++y++")"
+showSF (Const c) x y = "'"++show c
+showSF RngFst x y = showSFP RngFst x (splitString y)
+showSF RngSnd x y = showSFP RngSnd x (splitString y)
 showSF (Negate f) x y = "(not "++(showSF f x y)++")"
 showSF (DomElem dset) x y = "(haskey "++x++" ?)"
 showSF (RngElem dset) x y = "(haskey "++y++" ?)"
@@ -313,10 +343,16 @@ showSF (Comp f g) x y = showSF f x (showSF g x y)
 showSF Cat x y = "("++x++" ++ "++y++")"
 showSF Len x y = "(len "++y++")"
 showSF (Lift nm f) x y = "("++nm++" "++x++" "++y++")"
+showSF (CompSndL f g) x y = showSFP (CompSndL f g) x (splitString y)
+showSF (CompSndR f g) x y = showSFP (CompSndR f g) x (splitString y)
+showSF (CompCurryR f g) x y = showSFP (CompCurryR f g) x (splitString y)
+
 
 mean:: SymFun a b c -> (a -> b -> c)
 mean XX = \ x y -> x
 mean YY = \ x y -> y
+mean Fst = \ x (a,b) -> a
+mean Snd = \ x (a,b) -> b
 mean Equate = (==)
 mean Plus = (+)
 mean (Const c) = \ x y -> c
@@ -332,6 +368,18 @@ mean (Comp f g) = \ x y -> fm x (gm x y)
 mean Cat = \ x y -> x ++ "-" ++ y
 mean Len = \ x y -> length y
 mean (Lift nm f) = f
+mean (CompSndL f g) = \ x (a,b) -> mf x (mg x a,b)
+   where mf = mean f
+         mg = mean g
+mean (CompSndR f g) = \ x (a,b) -> mf x (a,mg x b)
+   where mf = mean f
+         mg = mean g
+mean (CompCurryR f g) =  \ x (a,b) -> mf x(a,mg a b)
+   where mf = mean f
+         mg = mean g
+
+
+-- ============================== ReWrites =========================
 
 data Fun x where
    Fun:: (SymFun x y ans) -> (x -> y -> ans) -> Fun (x -> y -> ans)
@@ -360,6 +408,7 @@ instance Show (BaseRep f k v) where
   show BiMapR = "BiMap"
   show (AndR x y) = "(And "++show x++" "++show y++")"
   show (AndPR x y p) = "(AndP "++show x++" "++show y++" "++show p++")"
+  show (ChainR x y p) = "(Chain "++show x++" "++show y++" "++show p++")"
   show (OrR x y p) =  "(Or "++show x++" "++show y++" "++show p++")"
   show (DiffR x y) = "(Diff "++show x++" "++show y++")"
   show (ProjectR x p) = "(Project "++show x++" "++show p++")"

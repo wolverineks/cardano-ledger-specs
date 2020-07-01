@@ -15,7 +15,7 @@
 module IterK where
 
 import Prelude hiding (lookup)
--- import Debug.Trace
+import Debug.Trace
 
 import qualified Data.List as List
 
@@ -28,18 +28,23 @@ import Data.Set(Set)
 import qualified Data.Set as Set
 
 import Data.Char(ord)
+import Data.List(sortBy)
 
 import Collect
 import SetAlgebra(Iter(..),
-                  And(..),Or(..),Project(..),Guard(..),Diff(..),Single(..),Sett(..),AndP(..),List(..),
+                  And(..),Or(..),Project(..),Guard(..),Diff(..),Single(..),Sett(..),AndP(..),List(..),Chain(..),
                   Exp(..),BaseRep(..),
                   dom, range, singleton, setSingleton, (◁), (⋪), (▷), (⋫), (∪), (⨃), (∈), (∉),(|>),(<|),
                   element,shape, lifo, fifo,
                   SymFun(..), Fun, fun, SymFun, apply,
-                  BiMap(..), Bimap, biMapAddpair, biMapRemovekey, biMapFromList, biMapEmpty, removeval
+                  BiMap(..), Bimap, biMapAddpair, biMapRemovekey, biMapFromList, biMapEmpty, removeval,
+                  Fun(..)
                  )
 
 import Test.HUnit
+import qualified Text.PrettyPrint.ANSI.Leijen as PP
+import Text.PrettyPrint.ANSI.Leijen(Doc,text,(<>),(<$>),(<+>),nest,group,align,hang,indent,
+    line,linebreak,softline,softbreak,hardline,hsep,vsep,sep,vcat,fillSep,fillCat,punctuate,parens)
 
 
 -- =====================================================================================
@@ -227,12 +232,12 @@ andLoop2 ::
   (Ord key,Iter f1, Iter f2) =>
   (key, b1, f1 key b1) ->
   (key, b2, f2 key b2) ->
-  Fun(b1 -> b2 -> b3) ->
+  Fun(key -> (b1,b2) -> b3) ->
   Collect (key, b3, AndP key b3)
 
 andLoop2 (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) p =
    case compare k1 k2 of
-      EQ -> one (k1,(apply p v1 v2), AndP f1 g2 p)
+      EQ -> one (k1,(apply p k1 (v1,v2)), AndP f1 g2 p)
       LT -> do { ftrip' <- lub k2 f1; andLoop2 ftrip' gtrip p }
       GT -> do { gtrip' <- lub k1 g2; andLoop2 ftrip gtrip' p }
 
@@ -245,11 +250,32 @@ instance Iter AndP where
 
    repOf (AndP f g p) = AndPR (repOf f) (repOf g) p
 
-   lookup k (x@(AndP f g p)) = do { v1 <- lookup k f; v2 <- lookup k g; Just(apply p v1 v2)} -- In the Maybe Monad
+   lookup k (x@(AndP f g p)) = do { v1 <- lookup k f; v2 <- lookup k g; Just(apply p k (v1,v2))} -- In the Maybe Monad
    addpair k v (x@(AndP f g p)) = error("Can't addpair to the view (AndP f g p).")
    addkv (k,v) (x@(AndP f g p)) comb = error("Can't addkc to the view (AndP f g p).")
    removekey k (AndP f g p) = AndP (removekey k f) g p
 
+-- ======================== Compound Chain =========================
+
+chainLoop:: (Ord rng,Ord dom,Iter f, Iter g) =>
+  (dom, rng, f dom rng) ->
+  (g rng w) ->
+  Fun(dom -> (rng,w) -> v) ->
+  Collect (dom, v, Chain dom v)
+chainLoop (f@(d,r1,f1)) g comb = do
+   (r2,w,g1) <- lub r1 g
+   case compare r1 r2 of
+      EQ -> one (d,apply comb d (r2,w),Chain f1 g comb)
+      LT -> do { trip <- nxt f1; chainLoop trip g comb}
+      GT -> error ("lub makes this unreachable")
+
+instance Iter Chain where
+   nxt (Chain f g p) = do { trip <- nxt f; chainLoop trip g p}
+   lub k (Chain f g p) = do { trip <- lub k f; chainLoop trip g p}
+   repOf (Chain f g p) = ChainR (repOf f) (repOf g) p
+
+   addkv = undefined
+   removekey = undefined
 
 -- ================= Compound Or =====================
 
@@ -460,9 +486,6 @@ stkcred = Map.fromList[(5,"a"),(6,"q"),(12,"r")]
 deleg = Map.fromList [ (n,chars !! n) | n <- [1..10]]
 stpool = Map.fromList [('A',99),('C',12),('F',42),('R',33),('Z',99)]
 
-instance Show (Code k v) where
-  show (Data x) = shape x
-
 -- =====================================================================================
 -- Some times we need to write our own version of functions over Map.Map that
 -- do not appear in the library
@@ -494,10 +517,10 @@ noKeys m (Bin _ k _ ls rs) = case Map.split k m of
 
 -- | Given a BaseRep we can materialize a (Collect k v) which has no intrinsic type.
 
-materialize :: (Ord k,Ord v) => BaseRep f k v -> Collect (k,v) -> f k v
+materialize :: (Ord k) => BaseRep f k v -> Collect (k,v) -> f k v
 materialize MapR x = runCollect x Map.empty (\ (k,v) ans -> Map.insert k v ans)
 materialize SetR x = Sett (runCollect x Set.empty (\ (k,_) ans -> Set.insert k ans))
-materialize BiMapR x = runCollect x  biMapEmpty (\ (k,v) ans -> addpair k v ans)
+-- materialize BiMapR x = runCollect x  biMapEmpty (\ (k,v) ans -> addpair k v ans)
 materialize SingleR x = runCollect x Fail (\ (k,v) _ignore -> Single k v)
 materialize other x = error ("Can't materialize compound (Iter f) type: "++show other++". Choose some other BaseRep.")
 
@@ -512,49 +535,87 @@ materialize other x = error ("Can't materialize compound (Iter f) type: "++show 
 -- (dom x) ⊆ (dom y)
 -- ===============================================================================================
 
-data Code k v where
-  Data:: (Ord k,Iter f) => f k v -> Code k v
---   Act:: (Ord k) => Collect (k,v) -> Code k v
 
-compile:: Exp (f k v) -> Code k v
-compile (Base rep relation) = Data relation
+data Dat k v where
+   BaseD :: (Iter f,Ord k) => f k v -> Dat k v
+   ProjectD :: Dat k v -> Fun (k -> v -> u) -> Dat k u
+   AndD :: Dat k v -> Dat k w -> Dat k (v,w)
+   ChainD:: Dat k v -> Dat v w -> Fun(k -> (v,w) -> u) -> Dat k u
+   AndPD::  Dat k v -> Dat k u -> Fun(k -> (v,u) -> w) -> Dat k w
+   OrD:: Dat k v -> Dat k v -> Fun(v -> v -> v) -> Dat k v
+   GuardD:: Dat k v -> Fun (k -> v -> Bool) -> Dat k v
+   DiffD :: Dat k v -> Dat k u -> Dat k v
+   FlipD :: Ord v => Dat k v -> Dat v k
 
-compile (Dom (Base SetR rel)) = Data rel
-compile (Dom (Singleton k v)) = Data (Sett (Set.singleton k))
-compile (Dom (SetSingleton k)) = Data (Sett (Set.singleton k))
-compile (Dom x) = case compile x of
-  Data xcode -> Data (Project xcode (fun (Const ())))
+ppDat :: Dat k v -> Doc
+ppDat (BaseD f) = parens $ text(show(repOf f))
+ppDat (ProjectD f p) = parens $ text "Proj" <+> align(vsep[ppDat f,text(show p)])
+ppDat (AndD f g) = parens $ text "And" <+> align(vsep[ppDat f,ppDat g])
+ppDat (ChainD f g p) = parens $ text "Chain" <+> align(vsep[ppDat f,ppDat g,text(show p)])
+ppDat (OrD f g p) = parens $ text "Or" <+> align(vsep[ppDat f,ppDat g,text(show p)])
+ppDat (GuardD f p) = parens $ text "Guard" <+> align(vsep[ppDat f,text(show p)])
+ppDat (DiffD f g) = parens $ text "Diff" <+> align(vsep[ppDat f,ppDat g])
+ppDat (AndPD f g p) = parens $ text "AndP" <+> align(vsep[ppDat f,ppDat g,text(show p)])
+ppDat (FlipD f) = parens $ text "Flip" <+> align(vsep[ppDat f])
 
-compile (Rng (Base SetR rel)) = Data (Sett (Set.singleton ()))
-compile (Rng (Singleton k v)) = Data (Sett (Set.singleton v))
-compile (Rng (SetSingleton k)) = Data (Sett (Set.singleton ()))
-compile (Rng x) =
-   case compile x of  -- This is going to be expensive, last gasp fallback build an index
-      Data xcode -> Data(materialize MapR (do { (_,y) <- lifo xcode; one(y,()) }))
+instance Show (Dat k v) where
+   show x = show(ppDat x)
 
-compile (DRestrict set rel) = case (compile set, compile rel) of
-   (Data setd, Data reld) -> Data (Project (And setd reld) (fun RngSnd))
 
-compile (DExclude set rel) = case (compile set,compile rel) of
-   (Data setd, Data reld) -> Data (Diff reld setd)
+compile:: Exp (f k v) -> Dat k v
+compile (Base rep relation) = BaseD relation
+compile (Singleton d r) = BaseD (Single d r)
+compile (SetSingleton d  ) = BaseD (SetSingle d  )
+compile (Dom (Base SetR rel)) = BaseD rel
+compile (Dom (Singleton k v)) = BaseD (SetSingle k)
+compile (Dom (SetSingleton k)) = BaseD (SetSingle k)
+compile (Dom x) = projD (compile x) (fun (Const ()))
+compile (Rng (Base SetR rel))  = BaseD (SetSingle ())
+compile (Rng (Singleton k v))  = BaseD (SetSingle v)
+compile (Rng (SetSingleton k)) = BaseD (SetSingle ())
+compile (Rng f) = projD (FlipD (compile f)) (fun (Const ()))
+compile (DRestrict set rel) = projD (andD (compile set) (compile rel)) (fun (RngSnd))
+compile (DExclude set rel) = DiffD (compile rel) (compile set)
+compile (RRestrict rel set) =
+   case (compile rel,compile set) of
+      (reld,BaseD x) -> GuardD reld (fun (RngElem x))
+      (reld,setd) -> chainD reld setd (fun RngFst)
+compile (RExclude rel set) =
+   case (compile set) of
+      (BaseD x) -> GuardD (compile rel) (fun (Negate(RngElem x)))
+      other -> GuardD (compile rel) (fun (Negate(RngElem (eval set))))  -- This could be expensive
+compile (UnionLeft rel1 rel2) =  OrD (compile rel1) (compile rel2) (fun YY)
+compile (UnionRight rel1 rel2) =  OrD (compile rel1) (compile rel2) (fun XX)
+compile (UnionPlus rel1 rel2) =  OrD (compile rel1) (compile rel2) (fun Plus)
 
-compile (RRestrict rel set) = case (compile rel,compile set) of
-   (Data reld, Data setd) -> Data (Guard reld (fun (RngElem setd)))
 
-compile (RExclude rel set) = case (compile rel,compile set) of
-   (Data reld, Data setd) -> Data (Guard reld (fun (Negate(RngElem setd))))
+-- ========================================================================
+-- smart constructors for Dat
 
-compile (UnionLeft rel1 rel2) =  case (compile rel1,compile rel2) of
-   (Data d1, Data d2) -> Data (Or d1 d2 (fun YY))
+smart :: Bool
+smart = False
 
-compile (UnionRight rel1 rel2) =  case (compile rel1,compile rel2) of
-   (Data d1, Data d2) -> Data (Or d1 d2 (fun XX))
+projD ::  Dat k v -> Fun (k -> v -> u) -> Dat k u
+projD x y = case (x,y) of
+   (ProjectD f (Fun p _), Fun q _) | smart -> projD f (fun (Comp q p))
+   (AndD f g, Fun q _) | smart -> andPD f g (fun (Comp q YY))
+   (AndPD f g (Fun p _), Fun q _) | smart -> andPD f g (fun (Comp q p))
+   (f, p) -> ProjectD f p
 
-compile (UnionPlus rel1 rel2) =  case (compile rel1,compile rel2) of
-   (Data d1, Data d2) -> Data (Or d1 d2 (fun Plus))
+andD :: Dat k v1 -> Dat k v2 -> Dat k (v1, v2)
+andD (ProjectD f (Fun p _)) g | smart = AndPD f g (fun(CompSndL YY p))
+andD f (ProjectD g (Fun p _)) | smart = AndPD f g (fun(CompSndR YY p))
+andD f g = AndD f g
 
-compile other = error "No compile yet"
+andPD :: Dat k v1 -> Dat k u -> Fun (k -> (v1, u) -> v) -> Dat k v
+andPD (ProjectD f (Fun p _)) g (Fun q _) | smart = andPD f g (fun(CompSndL q p))
+andPD f g p = AndPD f g p
 
+chainD :: Dat k v -> Dat v w -> Fun (k -> (v, w) -> u) -> Dat k u
+chainD f (ProjectD g (Fun p _)) (Fun q _) | smart = chainD f g (fun(CompCurryR q p))
+chainD f g p = ChainD f g p
+
+-- ==========================================================================
 
 eval:: Exp t -> t
 eval (Base rep relation) = relation
@@ -611,7 +672,7 @@ eval (UnionRight (Base rep x) (Singleton k v)) = addpair k v x   --TODO MIght no
 eval (UnionPlus (Base MapR x) (Base MapR y)) = Map.unionWith (+) x y
 
 eval (Singleton k v) = Single k v
-eval (SetSingleton k) = Sett (Set.singleton k)
+eval (SetSingleton k) = (SetSingle k)
 
 eval other = error ("Can't eval: "++show other ++" yet.")
 
@@ -626,9 +687,9 @@ eval other = error ("Can't eval: "++show other ++" yet.")
 addp :: Ord k => Iter f => (k,v) -> f k v -> f k v
 addp (k,v) xs = addpair k v xs
 
-fromList:: (Ord v,Ord k) => BaseRep f k v -> [(k,v)] -> f k v
+fromList:: Ord k => BaseRep f k v -> [(k,v)] -> f k v
 fromList MapR xs = foldr addp Map.empty xs
-fromList ListR xs = List xs
+fromList ListR xs = List (sortBy (\ x y -> compare (fst x) (fst y)) xs)
 fromList SetR xs = foldr addp (Sett (Set.empty)) xs
 fromList BiMapR xs = biMapFromList xs
 fromList SingleR xs = foldr addp Fail xs
@@ -674,6 +735,16 @@ l3 = [(4,12),(9,13),(12,44),(55,22)]
 evens :: Sett Int ()
 evens = fromList SetR [(n,()) | n <- [2,4,6,8,10,12,14,16,18,20,22,24,26]]
 
+l4 :: [(Int,String)]
+l4 = [(1,"m"),(2,"a"),(5,"z"),(6,"b"),(7,"r"),(12,"w"),(34,"a"),(50,"q"),(51,"l"),(105,"Z")]
+
+l5 :: [(String,Int)]
+l5 = [("a",101),("b",102),("c",103),("f",104),("m",105),("q",107),("s",106),("w",108),("y",109),("zz",110)]
+
+-- Chain l4 l5 =  [(1,(1,"m",105)),(2,(2,"a",101)),(6,(6,"b",102)),(12,(12,"w",108)),(34,(34,"a",101)),(50,(50,"q",107))]
+-- Chain l5 l4 =  [("m",("m",105,"Z"))]
+
+
 -- =================== Some sample (Exp t) =============================
 
 ex1 :: Exp Bool
@@ -713,7 +784,7 @@ eval_tests = TestList
 -- ========================== test that various Compound iterators work ================
 
 testcase :: (Eq k, Eq v, Show k, Show v, Iter f) => String -> f k v -> [(k, v)] -> Test
-testcase nm col ans = TestCase (assertEqual nm (runCollect (fifo col) [] (:)) ans)
+testcase nm col ans = TestCase (assertEqual nm ans (runCollect (fifo col) [] (:)))
 
 
 -- Tests where we vary how we represent l1 and l2 (the f in (Iter f) )
@@ -751,8 +822,18 @@ testProj nm rep f = testcase nm (Project (fromList rep f) (fun (Lift "ord" (\ x 
 -- We use the second projection in AndP, that is the value will come from l3
 
 testAndP :: (Iter f, Iter g) => String -> BaseRep f Int String -> BaseRep g Int Int -> Test
-testAndP nm rep1 rep2 =  testcase nm (AndP (fromList rep1 l1) (fromList rep2 l3) (fun YY))
+testAndP nm rep1 rep2 =  testcase nm (AndP (fromList rep1 l1) (fromList rep2 l3) (fun Snd))
                                      [(4,12),(12,44)]
+
+testChain:: (Iter f, Iter g) => String -> BaseRep f Int String -> BaseRep g String Int -> Test
+testChain nm rep1 rep2 = testcase nm (Chain (fromList rep1 l4) (fromList rep2 l5) (fun(Lift "all" (\ x (y,v) -> (x,y,v)))))
+                                    [(1,(1,"m",105)),(2,(2,"a",101)),(6,(6,"b",102)),(12,(12,"w",108)),(34,(34,"a",101)),(50,(50,"q",107))]
+
+testChain2:: (Iter f, Iter g) => String -> BaseRep f String Int -> BaseRep g Int String -> Test
+testChain2 nm rep1 rep2 = testcase nm (Chain (fromList rep1 l5) (fromList rep2 l4) (fun(Lift "all" (\ x (y,v) -> (x,y,v)))))
+                                    [("m",("m",105,"Z"))]
+
+
 
 iter_tests :: Test
 iter_tests = TestList
@@ -792,6 +873,16 @@ iter_tests = TestList
   ,testAndP "(AndP l1:Map l3:List ord)" MapR ListR
   ,testAndP "(AndP l1:Map l3:List Map)" MapR MapR
   ,testAndP "(AndP l1:BiMap l3:List Map)" BiMapR MapR
+
+  ,testChain "(Chain l4:List l5:Map)" ListR MapR
+  ,testChain "(Chain l4:Map l5:List)" MapR ListR
+  ,testChain "(Chain l4:Map l5:List Map)" MapR MapR
+  ,testChain "(Chain l4:BiMap l5:List Map)" BiMapR MapR
+
+  ,testChain2 "(Chain2 l5:List l4:Map)" ListR MapR
+  ,testChain2 "(Chain2 l5:Map l4:List)" MapR ListR
+  ,testChain2 "(Chain2 l5:Map l4:List Map)" MapR MapR
+  ,testChain2 "(Chain2 l5:BiMap l4:List Map)" BiMapR MapR
   ]
 
 alltests :: Test
