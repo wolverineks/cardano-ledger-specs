@@ -128,7 +128,7 @@ mkVRFKeyPair seed =
 
 -- | For testing purposes, create a VRF value
 mkCertifiedVRF ::
-  ToCBOR a =>
+  (Show a, ToCBOR a) =>
   WithResult a ->
   SignKeyVRF h ->
   CertifiedVRF h a

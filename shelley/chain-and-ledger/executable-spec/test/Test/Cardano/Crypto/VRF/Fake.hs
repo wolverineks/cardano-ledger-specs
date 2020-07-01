@@ -33,6 +33,7 @@ import qualified Data.ByteString.Builder as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Proxy (Proxy (..))
 import Data.Word (Word16, Word64)
+import Debug.Trace (traceShow)
 import GHC.Generics (Generic)
 import Shelley.Spec.Ledger.BaseTypes (Seed)
 
@@ -40,7 +41,7 @@ data FakeVRF
 
 -- | A class for seeds which sneakily contain the certified output we wish to
 -- "randomly" derive from them.
-class ToCBOR (Payload a) => SneakilyContainResult a where
+class (Show a, ToCBOR (Payload a)) => SneakilyContainResult a where
   type Payload a
   sneakilyExtractResult :: a -> SignKeyVRF FakeVRF -> OutputVRF FakeVRF
   unsneakilyExtractPayload :: a -> Payload a
@@ -48,7 +49,7 @@ class ToCBOR (Payload a) => SneakilyContainResult a where
 data WithResult a = WithResult !a !Word64
   deriving (Eq, Show)
 
-instance ToCBOR a => SneakilyContainResult (WithResult a) where
+instance (Show a, ToCBOR a) => SneakilyContainResult (WithResult a) where
   type Payload (WithResult a) = a
 
   -- Note that this instance completely ignores the key.
@@ -95,7 +96,18 @@ instance VRFAlgorithm FakeVRF where
   -- This implementation of `verifyVRF` checks the real result, which is hidden
   -- in the certificate, but ignores the produced value, which is set to be the
   -- result of the sneaking.
-  verifyVRF () (VerKeyFakeVRF n) a c = snd (evalVRF' a (SignKeyFakeVRF n)) == snd c
+  verifyVRF () (VerKeyFakeVRF n) a c =
+    if snd (evalVRF' a (SignKeyFakeVRF n)) == snd c
+      then True
+      else
+        traceShow
+          ( "verifyVRF_FAIL" :: String,
+            n,
+            a,
+            c,
+            evalVRF' a (SignKeyFakeVRF n)
+          )
+          False
 
   sizeVerKeyVRF _ = 8
   sizeSignKeyVRF _ = 8
