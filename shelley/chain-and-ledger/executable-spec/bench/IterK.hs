@@ -26,13 +26,12 @@ import Data.List(sortBy)
 
 import Collect
 import SetAlgebra(Iter(..),
-                  -- And(..),Or(..),Project(..),Guard(..),Diff(..),Single(..),Sett(..),AndP(..),List(..),Chain(..),
                   Exp(..),BaseRep(..),List(..),Sett(..),Single(..),
                   dom, range, singleton, setSingleton, (◁), (⋪), (▷), (⋫), (∪), (⨃), (∈), (∉),(|>),(<|),
                   element, lifo, fifo, noKeys,
-                  SymFun(..), Fun, fun, SymFun, apply,
                   BiMap(..), Bimap, biMapFromList, biMapEmpty, removeval,
-                  Fun(..), Basic(..)
+                  Fun(..), Basic(..),
+                  Fun, apply, plus, first, second, rngElem, rngFst, rngSnd, nEgate, constant, compCurryR, compSndL, compSndR, compose1
                  )
 
 import Text.PrettyPrint.ANSI.Leijen(Doc,text,(<+>),align,vsep,parens)
@@ -40,7 +39,9 @@ import Text.PrettyPrint.ANSI.Leijen(Doc,text,(<+>),align,vsep,parens)
 
 
 -- ============================================================================================
--- | Given a BaseRep we can materialize a (Collect k v) which has no intrinsic type.
+-- | Given a BaseRep we can materialize a (Collect k v) into the type witnessed by the BaseRep.
+-- Recall a (Collect k v) has no intrinsic type (it is just an ABSTRACT sequence of tuples), so
+-- the witness describes how to turn them into the chosen datatype.
 -- =============================================================================================
 
 materialize :: (Ord k) => BaseRep f k v -> Collect (k,v) -> f k v
@@ -52,9 +53,10 @@ materialize SingleR x = runCollect x Fail (\ (k,v) _ignore -> Single k v)
 -- materialize other x = error ("Can't materialize compound (Iter f) type: "++show other++". Choose some other BaseRep.")
 
 
--- =============================================================================
--- Another way to build any (f k v) given (Iter f) is to import it from a list.
--- =============================================================================
+-- ================================================================================
+-- On the flip side, a witness can be used to specifiy how to build a datatype from
+-- a CONCRETE sequence of tuples (a list). A way to import a type from from a list.
+-- ================================================================================
 
 addp :: (Ord k,Basic f) => (k,v) -> f k v -> f k v
 addp (k,v) xs = addpair k v xs
@@ -108,90 +110,91 @@ domEqSlow m n = do
 
 
 -- =================================================================================
--- Dat is a single datatype that incorporates compound iterators
+-- Query is a single datatype that incorporates a language that describes how to build
+-- compound iterators, from other iterators.
 -- =================================================================================
 
-data Dat k v where
-   BaseD :: (Iter f,Ord k) => BaseRep f k v -> f k v -> Dat k v
-   ProjectD :: Ord k => Dat k v -> Fun (k -> v -> u) -> Dat k u
-   AndD :: Ord k => Dat k v -> Dat k w -> Dat k (v,w)
-   ChainD:: (Ord k,Ord v) => Dat k v -> Dat v w -> Fun(k -> (v,w) -> u) -> Dat k u
-   AndPD::  Ord k => Dat k v -> Dat k u -> Fun(k -> (v,u) -> w) -> Dat k w
-   OrD:: Ord k => Dat k v -> Dat k v -> Fun(v -> v -> v) -> Dat k v
-   GuardD:: Ord k => Dat k v -> Fun (k -> v -> Bool) -> Dat k v
-   DiffD :: Ord k => Dat k v -> Dat k u -> Dat k v
+data Query k v where
+   BaseD :: (Iter f,Ord k) => BaseRep f k v -> f k v -> Query k v
+   ProjectD :: Ord k => Query k v -> Fun (k -> v -> u) -> Query k u
+   AndD :: Ord k => Query k v -> Query k w -> Query k (v,w)
+   ChainD:: (Ord k,Ord v) => Query k v -> Query v w -> Fun(k -> (v,w) -> u) -> Query k u
+   AndPD::  Ord k => Query k v -> Query k u -> Fun(k -> (v,u) -> w) -> Query k w
+   OrD:: Ord k => Query k v -> Query k v -> Fun(v -> v -> v) -> Query k v
+   GuardD:: Ord k => Query k v -> Fun (k -> v -> Bool) -> Query k v
+   DiffD :: Ord k => Query k v -> Query k u -> Query k v
 
 -- ======================================================================================
--- smart constructors for Dat. These apply semantic preserving rewrites when applicable
+-- smart constructors for Query. These apply semantic preserving rewrites when applicable
 -- ======================================================================================
 
 smart :: Bool
 smart = True
 
-projD ::  Ord k => Dat k v -> Fun (k -> v -> u) -> Dat k u
+projD ::  Ord k => Query k v -> Fun (k -> v -> u) -> Query k u
 projD x y = case (x,y) of
-   (ProjectD f (Fun p _), Fun q _) | smart -> projD f (fun (Comp q p))
-   (AndD f g, Fun q _) | smart -> andPD f g (fun (Comp q YY))
-   (AndPD f g (Fun p _), Fun q _) | smart -> andPD f g (fun (Comp q p))
+   (ProjectD f p, q) | smart -> projD f (compose1 q p)
+   (AndD f g,q) | smart -> andPD f g (compose1 q second)
+   (AndPD f g p, q) | smart -> andPD f g (compose1 q p)
    (f, p) -> ProjectD f p
 
-andD :: Ord k => Dat k v1 -> Dat k v2 -> Dat k (v1, v2)
-andD (ProjectD f (Fun p _)) g | smart = AndPD f g (fun(CompSndL YY p))
-andD f (ProjectD g (Fun p _)) | smart = AndPD f g (fun(CompSndR YY p))
+andD :: Ord k => Query k v1 -> Query k v2 -> Query k (v1, v2)
+andD (ProjectD f p) g | smart = AndPD f g (compSndL second p)
+andD f (ProjectD g p) | smart = AndPD f g (compSndR second p)
 andD f g = AndD f g
 
-andPD :: Ord k => Dat k v1 -> Dat k u -> Fun (k -> (v1, u) -> v) -> Dat k v
-andPD (ProjectD f (Fun p _)) g (Fun q _) | smart = andPD f g (fun(CompSndL q p))
+andPD :: Ord k => Query k v1 -> Query k u -> Fun (k -> (v1, u) -> v) -> Query k v
+andPD (ProjectD f p) g q | smart = andPD f g (compSndL q p)
 andPD f g p = AndPD f g p
 
-chainD :: (Ord k,Ord v) => Dat k v -> Dat v w -> Fun (k -> (v, w) -> u) -> Dat k u
-chainD f (ProjectD g (Fun p _)) (Fun q _) | smart = chainD f g (fun(CompCurryR q p))
+chainD :: (Ord k,Ord v) => Query k v -> Query v w -> Fun (k -> (v, w) -> u) -> Query k u
+chainD f (ProjectD g p) q | smart = chainD f g (compCurryR q p)
 chainD f g p = ChainD f g p
 
 
 -- ================================================================================
--- | Compile the (Exp (f k v)) to a Dat iterator, and a BaseRep that indicates
+-- | Compile the (Exp (f k v)) to a Query iterator, and a BaseRep that indicates
 --   how to materialize the iterator to the correct type. Recall the iterator
 --   can be used to constuct many things using runCollect, but here we want
 --   to materialize it to the same type as the (Exp (f k v)), i.e. (f k v).
 -- ================================================================================
 
-compile:: Exp (f k v) -> (Dat k v,BaseRep f k v)
+compile:: Exp (f k v) -> (Query k v,BaseRep f k v)
 compile (Base rep relation) = (BaseD rep relation,rep)
 compile (Singleton d r) = (BaseD SingleR (Single d r),SingleR)
 compile (SetSingleton d  ) = (BaseD SingleR (SetSingle d  ),SingleR)
 compile (Dom (Base SetR rel)) = (BaseD SetR rel,SetR)
 compile (Dom (Singleton k v)) = (BaseD SetR (Sett(Set.singleton k)),SetR)
 compile (Dom (SetSingleton k)) = (BaseD SetR (Sett(Set.singleton k)),SetR)
-compile (Dom x) = (projD (fst(compile x)) (fun (Const ())),SetR)
+compile (Dom x) = (projD (fst(compile x)) (constant ()),SetR)
 compile (Rng (Base SetR rel))  = (BaseD SetR (Sett(Set.singleton ())),SetR)
 compile (Rng (Singleton k v))  = (BaseD SetR (Sett(Set.singleton v)),SetR)
 compile (Rng (SetSingleton k)) = (BaseD SetR (Sett(Set.singleton ())),SetR)
 compile (Rng f) = (BaseD SetR (rngStep (fst(compile f))),SetR)  -- We really ought to memoize this. It might be computed many times.
-compile (DRestrict set rel) = (projD (andD (fst(compile set)) reld) (fun (RngSnd)),rep)
+compile (DRestrict set rel) = (projD (andD (fst(compile set)) reld) rngSnd,rep)
     where (reld,rep) = compile rel
 compile (DExclude set rel) = (DiffD reld (fst(compile set)),rep)
        where (reld,rep) = compile rel
 compile (RRestrict rel set) =
    case (compile rel,compile set) of
-      ((reld,rep),(BaseD _ x,_)) -> (GuardD reld (fun (RngElem x)),rep)
-      ((reld,rep),(setd,_)) -> (chainD reld setd (fun RngFst),rep)
+      ((reld,rep),(BaseD _ x,_)) -> (GuardD reld (rngElem x),rep)
+      ((reld,rep),(setd,_)) -> (chainD reld setd rngFst,rep)
 compile (RExclude rel set) =
    case (compile rel,compile set) of
-      ((reld,rep),(BaseD _ x,_)) -> (GuardD reld (fun (Negate(RngElem x))),rep)
-      ((reld,rep),_) -> (GuardD reld (fun (Negate(RngElem (eval set)))),rep)  -- This could be expensive
-compile (UnionLeft rel1 rel2) =  (OrD rel1d (fst(compile rel2)) (fun YY),rep)
+      ((reld,rep),(BaseD _ x,_)) -> (GuardD reld (nEgate (rngElem x)),rep)
+      ((reld,rep),_) -> (GuardD reld (nEgate (rngElem (eval set))),rep)  -- This could be expensive
+compile (UnionLeft rel1 rel2) =  (OrD rel1d (fst(compile rel2)) second,rep)
     where (rel1d,rep) = compile rel1
-compile (UnionRight rel1 rel2) =  (OrD rel1d (fst(compile rel2)) (fun XX),rep)
+compile (UnionRight rel1 rel2) =  (OrD rel1d (fst(compile rel2)) first,rep)
     where (rel1d,rep) = compile rel1
-compile (UnionPlus rel1 rel2) =  (OrD rel1d (fst(compile rel2)) (fun Plus),rep)
+compile (UnionPlus rel1 rel2) =  (OrD rel1d (fst(compile rel2)) plus,rep)
     where (rel1d,rep) = compile rel1
 
 -- ===========================================================================
 -- run materializes compiled code, only if it is not already data
 -- ===========================================================================
 
-run :: Ord k => (Dat k v,BaseRep f k v) -> f k v
+run :: Ord k => (Query k v,BaseRep f k v) -> f k v
 run (BaseD SetR x,SetR) = x               -- If it is already data (BaseD)
 run (BaseD MapR x,MapR) = x               -- and in the right form (the BaseRep's match)
 run (BaseD SingleR x,SingleR) = x         -- just return the data
@@ -284,60 +287,60 @@ eval (Singleton k v) = Single k v
 eval (SetSingleton k) = (SetSingle k)
 
 -- ==============================================================================================
--- To make compound iterators, i.e. instance (Iter Dat), we need "step" functions for each kind
+-- To make compound iterators, i.e. instance (Iter Query), we need "step" functions for each kind
 -- ==============================================================================================
 
 -- ==== Project ====
 projStep
   :: Ord k =>
-     (t -> Collect (k, v, Dat k v))
-     -> Fun (k -> v -> u) -> t -> Collect (k, u, Dat k u)
+     (t -> Collect (k, v, Query k v))
+     -> Fun (k -> v -> u) -> t -> Collect (k, u, Query k u)
 projStep next p f = do { (k,v,f') <- next f; one (k,apply p k v,ProjectD f' p) }
 
 -- ===== And = ====
 andStep
   :: Ord a =>
-     (a, b1, Dat a b1)
-     -> (a, b2, Dat a b2) -> Collect (a, (b1, b2), Dat a (b1, b2))
+     (a, b1, Query a b1)
+     -> (a, b2, Query a b2) -> Collect (a, (b1, b2), Query a (b1, b2))
 andStep (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) =
    case compare k1 k2 of
       EQ -> one (k1,(v1,v2), AndD f1 g2)
-      LT -> do { ftrip' <- lubDat k2 f1; andStep ftrip' gtrip  }
-      GT -> do { gtrip' <- lubDat k1 g2; andStep ftrip gtrip' }
+      LT -> do { ftrip' <- lubQuery k2 f1; andStep ftrip' gtrip  }
+      GT -> do { gtrip' <- lubQuery k1 g2; andStep ftrip gtrip' }
 
 -- ==== Chain ====
 chainStep
   :: (Ord b, Ord a) =>
-     (a, b, Dat a b)
-     -> Dat b w -> Fun (a -> (b, w) -> u) -> Collect (a, u, Dat a u)
+     (a, b, Query a b)
+     -> Query b w -> Fun (a -> (b, w) -> u) -> Collect (a, u, Query a u)
 chainStep (f@(d,r1,f1)) g comb = do
-   (r2,w,g1) <- lubDat r1 g
+   (r2,w,g1) <- lubQuery r1 g
    case compare r1 r2 of
       EQ -> one (d,apply comb d (r2,w),ChainD f1 g comb)
-      LT -> do { trip <- nxtDat f1; chainStep trip g comb}
+      LT -> do { trip <- nxtQuery f1; chainStep trip g comb}
       GT -> error ("lub makes this unreachable")
 
 -- ==== And with Projection ====
 andPstep
   :: Ord a =>
-     (a, b1, Dat a b1)
-     -> (a, b2, Dat a b2)
+     (a, b1, Query a b1)
+     -> (a, b2, Query a b2)
      -> Fun (a -> (b1, b2) -> w)
-     -> Collect (a, w, Dat a w)
+     -> Collect (a, w, Query a w)
 andPstep (ftrip@(k1,v1,f1)) (gtrip@(k2,v2,g2)) p =
    case compare k1 k2 of
       EQ -> one (k1,(apply p k1 (v1,v2)), AndPD f1 g2 p)
-      LT -> do { ftrip' <- lubDat k2 f1; andPstep ftrip' gtrip p }
-      GT -> do { gtrip' <- lubDat k1 g2; andPstep ftrip gtrip' p }
+      LT -> do { ftrip' <- lubQuery k2 f1; andPstep ftrip' gtrip p }
+      GT -> do { gtrip' <- lubQuery k1 g2; andPstep ftrip gtrip' p }
 
 -- ==== Or with combine ====
 orStep
   :: (Ord k, Ord a) =>
-     (Dat k v -> Collect (a, v, Dat k v))
-     -> Dat k v
-     -> Dat k v
+     (Query k v -> Collect (a, v, Query k v))
+     -> Query k v
+     -> Query k v
      -> Fun (v -> v -> v)
-     -> Collect (a, v, Dat k v)
+     -> Collect (a, v, Query k v)
 orStep next f g comb =
    case (hasElem (next f), hasElem (next g)) of   -- We have to be careful, because if only one has a nxt, there is still an answer
       (Nothing,Nothing) -> none
@@ -352,67 +355,67 @@ orStep next f g comb =
 -- ===== Guard =====
 guardStep
   :: Ord a =>
-     (Dat a b -> Collect (a, b, Dat a b))
-     -> Fun (a -> b -> Bool) -> Dat a b -> Collect (a, b, Dat a b)
+     (Query a b -> Collect (a, b, Query a b))
+     -> Fun (a -> b -> Bool) -> Query a b -> Collect (a, b, Query a b)
 guardStep next p f = do { triple <- next f; loop triple }
-   where loop (k,v,f') = if (apply p k v) then one (k,v,GuardD f' p) else do { triple <- nxtDat f'; loop triple}
+   where loop (k,v,f') = if (apply p k v) then one (k,v,GuardD f' p) else do { triple <- nxtQuery f'; loop triple}
 
 -- ===== Difference by key =====
-diffStep :: Ord k => (k, v, Dat k v) -> Dat k u -> Collect (k, v, Dat k v)
+diffStep :: Ord k => (k, v, Query k v) -> Query k u -> Collect (k, v, Query k v)
 diffStep (t1@(k1,u1,f1)) g =
-   case hasElem (lubDat k1 g) of
+   case hasElem (lubQuery k1 g) of
       Nothing -> one (k1,u1,DiffD f1 g)  -- g has nothing to subtract
       Just (t2@(k2,u2,g2)) -> case compare k1 k2 of
-          EQ -> do { tup <- nxtDat f1; diffStep tup g2 }
+          EQ -> do { tup <- nxtQuery f1; diffStep tup g2 }
           LT -> one (k1,u1,DiffD f1 g)
           GT -> one (k1,u1,DiffD f1 g)   -- the hasLub guarantees k1 <= k2, so this case is dead code
 
 -- ========== Rng ====================
-rngStep :: Ord v => Dat k v -> Sett v ()
+rngStep :: Ord v => Query k v -> Sett v ()
 rngStep dat = materialize SetR (loop dat)
   where loop x = do { (k,v,x2) <- nxt x; front (v,()) (loop x2) }
 
--- =========================== Now the Iter instance for Dat ======================
+-- =========================== Now the Iter instance for Query ======================
 
-nxtDat :: Dat a b -> Collect (a, b, Dat a b)
-nxtDat (BaseD rep x) = do {(k,v,x2) <- nxt x; one(k,v,BaseD rep x2)}
-nxtDat (ProjectD x p) = projStep nxtDat p x
-nxtDat (AndD f g) = do { triple1 <- nxtDat f; triple2 <- nxtDat g; andStep triple1 triple2 }
-nxtDat (ChainD f g p) = do { trip <- nxtDat f; chainStep trip g p}
-nxtDat (AndPD f g p) = do { triple1 <- nxtDat f; triple2 <- nxtDat g; andPstep triple1 triple2 p }
-nxtDat (OrD f g comb) = orStep nxtDat f g comb
-nxtDat (GuardD f p) = guardStep nxtDat p f
-nxtDat (DiffD f g) = do { trip <- nxtDat f; diffStep trip g }
+nxtQuery :: Query a b -> Collect (a, b, Query a b)
+nxtQuery (BaseD rep x) = do {(k,v,x2) <- nxt x; one(k,v,BaseD rep x2)}
+nxtQuery (ProjectD x p) = projStep nxtQuery p x
+nxtQuery (AndD f g) = do { triple1 <- nxtQuery f; triple2 <- nxtQuery g; andStep triple1 triple2 }
+nxtQuery (ChainD f g p) = do { trip <- nxtQuery f; chainStep trip g p}
+nxtQuery (AndPD f g p) = do { triple1 <- nxtQuery f; triple2 <- nxtQuery g; andPstep triple1 triple2 p }
+nxtQuery (OrD f g comb) = orStep nxtQuery f g comb
+nxtQuery (GuardD f p) = guardStep nxtQuery p f
+nxtQuery (DiffD f g) = do { trip <- nxtQuery f; diffStep trip g }
 
-lubDat :: Ord a => a ->  Dat a b -> Collect (a, b, Dat a b)
-lubDat key (BaseD rep x) = do {(k,v,x2) <- lub key x; one(k,v,BaseD rep x2)}
-lubDat key (ProjectD x p) = projStep (lubDat key) p x
-lubDat key (AndD f g) = do { triple1 <- lubDat key f; triple2 <- lubDat key g; andStep triple1 triple2 }
-lubDat key (ChainD f g p) = do { trip <- lubDat key f; chainStep trip g p}
-lubDat  key (AndPD f g p) = do { triple1 <- lubDat key f; triple2 <- lubDat key g; andPstep triple1 triple2 p}
-lubDat key (OrD f g comb) = orStep (lubDat key) f g comb
-lubDat key (GuardD f p) = guardStep (lubDat key) p f
-lubDat key (DiffD f g) = do { trip <- lubDat key f; diffStep trip g}
+lubQuery :: Ord a => a ->  Query a b -> Collect (a, b, Query a b)
+lubQuery key (BaseD rep x) = do {(k,v,x2) <- lub key x; one(k,v,BaseD rep x2)}
+lubQuery key (ProjectD x p) = projStep (lubQuery key) p x
+lubQuery key (AndD f g) = do { triple1 <- lubQuery key f; triple2 <- lubQuery key g; andStep triple1 triple2 }
+lubQuery key (ChainD f g p) = do { trip <- lubQuery key f; chainStep trip g p}
+lubQuery  key (AndPD f g p) = do { triple1 <- lubQuery key f; triple2 <- lubQuery key g; andPstep triple1 triple2 p}
+lubQuery key (OrD f g comb) = orStep (lubQuery key) f g comb
+lubQuery key (GuardD f p) = guardStep (lubQuery key) p f
+lubQuery key (DiffD f g) = do { trip <- lubQuery key f; diffStep trip g}
 
 
-instance Iter Dat where
-   nxt = nxtDat
-   lub = lubDat
+instance Iter Query where
+   nxt = nxtQuery
+   lub = lubQuery
 
 -- =================================================
 -- Show Instances
 -- =================================================
 
-ppDat :: Dat k v -> Doc
-ppDat (BaseD rep f) = parens $ text(show rep)
-ppDat (ProjectD f p) = parens $ text "Proj" <+> align(vsep[ppDat f,text(show p)])
-ppDat (AndD f g) = parens $ text "And" <+> align(vsep[ppDat f,ppDat g])
-ppDat (ChainD f g p) = parens $ text "Chain" <+> align(vsep[ppDat f,ppDat g,text(show p)])
-ppDat (OrD f g p) = parens $ text "Or" <+> align(vsep[ppDat f,ppDat g,text(show p)])
-ppDat (GuardD f p) = parens $ text "Guard" <+> align(vsep[ppDat f,text(show p)])
-ppDat (DiffD f g) = parens $ text "Diff" <+> align(vsep[ppDat f,ppDat g])
-ppDat (AndPD f g p) = parens $ text "AndP" <+> align(vsep[ppDat f,ppDat g,text(show p)])
+ppQuery :: Query k v -> Doc
+ppQuery (BaseD rep f) = parens $ text(show rep)
+ppQuery (ProjectD f p) = parens $ text "Proj" <+> align(vsep[ppQuery f,text(show p)])
+ppQuery (AndD f g) = parens $ text "And" <+> align(vsep[ppQuery f,ppQuery g])
+ppQuery (ChainD f g p) = parens $ text "Chain" <+> align(vsep[ppQuery f,ppQuery g,text(show p)])
+ppQuery (OrD f g p) = parens $ text "Or" <+> align(vsep[ppQuery f,ppQuery g,text(show p)])
+ppQuery (GuardD f p) = parens $ text "Guard" <+> align(vsep[ppQuery f,text(show p)])
+ppQuery (DiffD f g) = parens $ text "Diff" <+> align(vsep[ppQuery f,ppQuery g])
+ppQuery (AndPD f g p) = parens $ text "AndP" <+> align(vsep[ppQuery f,ppQuery g,text(show p)])
 
 
-instance Show (Dat k v) where
-   show x = show(ppDat x)
+instance Show (Query k v) where
+   show x = show(ppQuery x)

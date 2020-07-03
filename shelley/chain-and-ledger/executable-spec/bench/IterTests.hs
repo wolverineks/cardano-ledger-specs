@@ -10,9 +10,10 @@ import SetAlgebra(Iter(..),
                   Exp(..),BaseRep(..),List(..),Sett(..),Single(..),
                   dom, range, singleton, setSingleton, (◁), (⋪), (▷), (⋫), (∪), (⨃), (∈), (∉),(|>),(<|),
                   element, lifo, fifo,
-                  SymFun(..), Fun, fun, SymFun, apply,
+                  Fun, apply,
                   BiMap(..), Bimap, biMapEmpty, biMapFromList,removeval,
-                  Fun(..)
+                  Fun(..), Pat(..), Expr(..), Lam(..), evaluate, reify,
+                  constant, domElem, second, lift, rngSnd
                  )
 
 
@@ -164,7 +165,7 @@ eval_tests = TestList
 testcase :: (Eq k, Eq v, Show k, Show v, Iter f) => String -> f k v -> [(k, v)] -> Test
 testcase nm col ans = TestCase (assertEqual nm ans (runCollect (fifo col) [] (:)))
 
-fromListD :: (Ord k,Iter f) => BaseRep f k v -> [(k,v)] -> Dat k v
+fromListD :: (Ord k,Iter f) => BaseRep f k v -> [(k,v)] -> Query k v
 fromListD rep xs = BaseD rep (fromList rep xs)
 
 -- Tests where we vary how we represent l1 and l2 (the f in (Iter f) )
@@ -179,7 +180,7 @@ testAnd1 nm rep = testcase nm (AndD (fromListD rep l1) (fromListD rep l2))
 testAnd2 nm rep = TestCase (assertEqual nm (runCollect (lifo (AndD (fromListD rep l1) (fromListD rep l2))) [] (:))
                                            (reverse  [(4,("d","d")),(5,("e","e")),(10,("j","j")),(21,("v","v"))]))
 
-testOr nm rep = testcase nm (OrD (fromListD rep l1) (fromListD rep l2) (fun Cat))
+testOr nm rep = testcase nm (OrD (fromListD rep l1) (fromListD rep l2) (lift (\x y -> x++"-"++y)))
                             [(1,"a"),(3,"c"),(4,"d-d"),(5,"e-e"),(6,"f"),(10,"j-j"),(11,"k"),(12,"l"),(21,"v-v"),(26,"z")]
 
 testDiff1 nm rep = testcase nm (DiffD (fromListD rep l1) (fromListD rep l2))
@@ -192,11 +193,11 @@ testDiff2 nm rep = testcase nm (DiffD (fromListD rep l2) (fromListD rep l1)) [(3
 -- tests where we vary both the data, and how it is represented.
 
 testGuard :: (Show b, Iter f, Ord b) => String -> BaseRep f Int b -> [(Int, b)] -> Test
-testGuard nm rep f = testcase nm (GuardD (fromListD rep f) (fun (DomElem evens)))
+testGuard nm rep f = testcase nm (GuardD (fromListD rep f) (domElem evens))
                                  (filter (even . fst) f)
 
 testProj :: (Show k, Ord k, Iter f) => String -> BaseRep f k [Char] -> [(k, [Char])] -> Test
-testProj nm rep f = testcase nm (ProjectD (fromListD rep f) (fun (Lift "ord" (\ _x y -> ord (y!!0)))))
+testProj nm rep f = testcase nm (ProjectD (fromListD rep f) (lift (\ _x y -> ord (y!!0))))
                                 [ (k,ord(v!!0)) | (k,v) <- f ]
 
 -- =============================================================================
@@ -204,15 +205,15 @@ testProj nm rep f = testcase nm (ProjectD (fromListD rep f) (fun (Lift "ord" (\ 
 -- We use the second projection in AndP, that is the value will come from l3
 
 testAndP :: (Iter f, Iter g) => String -> BaseRep f Int String -> BaseRep g Int Int -> Test
-testAndP nm rep1 rep2 =  testcase nm (AndPD (fromListD rep1 l1) (fromListD rep2 l3) (fun Snd))
+testAndP nm rep1 rep2 =  testcase nm (AndPD (fromListD rep1 l1) (fromListD rep2 l3) rngSnd)
                                      [(4,12),(12,44)]
 
 testChain:: (Iter f, Iter g) => String -> BaseRep f Int String -> BaseRep g String Int -> Test
-testChain nm rep1 rep2 = testcase nm (ChainD (fromListD rep1 l4) (fromListD rep2 l5) (fun(Lift "all" (\ x (y,v) -> (x,y,v)))))
+testChain nm rep1 rep2 = testcase nm (ChainD (fromListD rep1 l4) (fromListD rep2 l5) (lift (\ x (y,v) -> (x,y,v))))
                                     [(1,(1,"m",105)),(2,(2,"a",101)),(6,(6,"b",102)),(12,(12,"w",108)),(34,(34,"a",101)),(50,(50,"q",107))]
 
 testChain2:: (Iter f, Iter g) => String -> BaseRep f String Int -> BaseRep g Int String -> Test
-testChain2 nm rep1 rep2 = testcase nm (ChainD (fromListD rep1 l5) (fromListD rep2 l4) (fun(Lift "all" (\ x (y,v) -> (x,y,v)))))
+testChain2 nm rep1 rep2 = testcase nm (ChainD (fromListD rep1 l5) (fromListD rep2 l4) (lift (\ x (y,v) -> (x,y,v))))
                                     [("m",("m",105,"Z"))]
 
 

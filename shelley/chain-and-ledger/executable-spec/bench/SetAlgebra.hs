@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric           #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RankNTypes #-}
 
 
 module SetAlgebra where
@@ -415,15 +416,8 @@ setSingleton :: (Show k, Ord k) => k -> Exp (Single k ())
 setSingleton k = SetSingleton k
 
 
--- =======================================================================================
--- | Symbolc functions are data, that can be pattern matched over. They
--- 1) Represent a wide class of binary functions that are used in translating the SetAlgebra
--- 2) Turned into a String so they can be printed
--- 3) Turned into the function they represent.
--- 4) Composed into bigger functions
--- 5) Symbolically symplified
--- ========================================================================================
 
+{-
 data SymFun x y ans where
   XX:: SymFun a b a                                                -- (\ x y -> x)
   YY:: SymFun a b b                                                -- (\ x y -> y)
@@ -445,7 +439,7 @@ data SymFun x y ans where
                 SymFun k (a,c) d                                    -- (compCurry f g) = \ x (a,b) -> f x(a,g a b)
   Cat :: SymFun String String String
   Len :: Foldable t => SymFun a (t b) Int
-  Lift:: String -> (a -> b -> c) -> SymFun a b c
+  LiftZ:: String -> (a -> b -> c) -> SymFun a b c
 
 
 splitString :: [Char] -> ([Char], [Char])
@@ -467,7 +461,7 @@ showSF :: SymFun a b c -> String -> String -> String
 showSF XX x y = x
 showSF YY x y = y
 showSF Fst x y = showSFP Fst x (splitString y)
-showSF Snd x y = showSFP Fst x (splitString y)
+showSF Snd x y = showSFP Snd x (splitString y)
 showSF Equate x y = "("++x++" == "++y++")"
 showSF Plus x y = "("++x++" + "++y++")"
 showSF (Const c) x y = "'"++show c
@@ -479,7 +473,7 @@ showSF (RngElem dset) x y = "(haskey "++y++" ?)"
 showSF (Comp f g) x y = showSF f x (showSF g x y)
 showSF Cat x y = "("++x++" ++ "++y++")"
 showSF Len x y = "(len "++y++")"
-showSF (Lift nm f) x y = "("++nm++" "++x++" "++y++")"
+showSF (LiftZ nm f) x y = "("++nm++" "++x++" "++y++")"
 showSF (CompSndL f g) x y = showSFP (CompSndL f g) x (splitString y)
 showSF (CompSndR f g) x y = showSFP (CompSndR f g) x (splitString y)
 showSF (CompCurryR f g) x y = showSFP (CompCurryR f g) x (splitString y)
@@ -504,7 +498,7 @@ mean (Comp f g) = \ x y -> fm x (gm x y)
         !gm = mean g
 mean Cat = \ x y -> x ++ "-" ++ y
 mean Len = \ x y -> length y
-mean (Lift nm f) = f
+mean (LiftZ nm f) = f
 mean (CompSndL f g) = \ x (a,b) -> mf x (mg x a,b)
    where !mf = mean f
          !mg = mean g
@@ -518,6 +512,7 @@ mean (CompCurryR f g) =  \ x (a,b) -> mf x(a,mg a b)
 
 -- ======= Operations for building and using Symbolic functions  =======
 
+
 data Fun x where
    Fun:: (SymFun x y ans) -> (x -> y -> ans) -> Fun (x -> y -> ans)
 
@@ -527,14 +522,16 @@ fun s = Fun s (mean s)
 apply :: Fun (a -> b -> c) -> a -> b -> c
 apply (Fun s f) = f
 
--- ====================== Showing things ===============================
-
 instance Show (Fun x) where
    show (Fun s f) = show s
 
 
 instance Show (SymFun a b c) where
    show x = "(\\ x y -> "++(showSF x "x" "y")++")"
+
+
+-}
+-- ====================== Showing things ===============================
 
 
 instance Show (BaseRep f k v) where
@@ -559,3 +556,190 @@ instance Show (Exp t) where
   show (UnionRight x y) = "("++show x++" ⨃ "++show y++")"
   show (Singleton x y) = "(singleton "++show x++" "++show y++")"
   show (SetSingleton x) = "(Set.Singleton "++show x++")"
+
+
+-- =======================================================================================
+-- | Symbolc functions (Fun) are data, that can be pattern matched over. They
+-- 1) Represent a wide class of binary functions that are used in translating the SetAlgebra
+-- 2) Turned into a String so they can be printed
+-- 3) Turned into the function they represent.
+-- 4) Composed into bigger functions
+-- 5) Symbolically symplified
+-- Here  we imlement Symbolic Binary functions with upto 4 variables
+-- ==========================================================================
+
+data Pat env t where
+  P1:: Pat (d,c,b,a) d
+  P2:: Pat (d,c,b,a) c
+  P3:: Pat (d,c,b,a) b
+  P4:: Pat (d,c,b,a) a
+  PPair:: Pat (d,c,b,a) a -> Pat (d,c,b,a) b ->  Pat (d,c,b,a) (a,b)
+
+data Expr env t where
+  X1:: Expr (d,c,b,a) d
+  X2:: Expr (d,c,b,a) c
+  X3:: Expr (d,c,b,a) b
+  X4:: Expr (d,c,b,a) a
+  HasKey:: (Iter f,Ord k) =>  Expr e k -> (f k v) -> Expr e Bool
+  Neg :: Expr e Bool -> Expr e Bool
+  Ap:: Lam(a -> b -> c) -> Expr e a -> Expr e b -> Expr e c
+  EPair:: Expr e a -> Expr e b -> Expr e (a,b)
+  FST:: Expr e (a,b) -> Expr e a
+  SND:: Expr e (a,b) -> Expr e b
+  Lit :: Show t => t -> Expr env t
+
+-- Carefull no pattern P1, P2, P3, P4 should appear MORE THAN ONCE in a Lam.
+
+data Lam t where
+  Lam::  Pat (d,c,b,a) t -> Pat (d,c,b,a) s -> Expr (d,c,b,a) v -> Lam (t -> s -> v)
+  -- Lam2:: PPat (a1,b1,c1,d1) (e1,f1,g1,h1) s -> PPat (e1,f1,g1,h1) (i1,j1,k1,l1) t -> Expr (i1,j1,k1,l1) v -> Lam (s -> t -> v)
+  Add :: Num n => Lam (n -> n -> n)
+  Eql :: Eq t => Lam(t -> t -> Bool)
+  Lift:: (a -> b -> c) -> Lam (a -> b -> c)  -- For use n the tests only!
+
+
+-- ====================== Evaluating ================
+env0 :: (d,c,b,a)
+env0 = (undefined,undefined,undefined,undefined)
+
+reify:: Lam t -> t
+reify (Lam p1 p2 e) = \ x y -> evaluate (bind p1 x (bind p2 y env0)) e
+reify Add = (+)
+reify Eql = (==)
+reify (Lift f) = f
+
+evaluate:: (a,b,c,d) -> Expr (a,b,c,d) t -> t
+evaluate (x1,x2,x3,x4) X1 = x1
+evaluate (x1,x2,x3,x4) X2 = x2
+evaluate (x1,x2,x3,x4) X3 = x3
+evaluate (x1,x2,x3,x4) X4 = x4
+evaluate env (EPair p q) = (evaluate env p, evaluate env q)
+evaluate env (HasKey k datum) = haskey (evaluate env k) datum
+evaluate env (Neg x) = not(evaluate env x)
+evaluate env (Ap oper f g) = (reify oper) (evaluate env f) (evaluate env g)
+evaluate env (FST f) = fst (evaluate env f)
+evaluate env (SND f) = snd (evaluate env f)
+evaluate env (Lit x) = x
+
+-- Be carefull, if you create a lambda where P1,P2,P3, or P4, appears more than once
+-- The rightmost binding of the repeated Pat will over ride the ones to the left.
+
+bind :: Pat env t -> t -> env -> env
+bind P1 v (d,c,b,a) = (v,c,b,a)
+bind P2 v (d,c,b,a) = (d,v,b,a)
+bind P3 v (d,c,b,a) = (d,c,v,a)
+bind P4 v (d,c,b,a) = (d,c,b,v)
+bind (PPair p q) (v1,v2) (d,c,b,a) = bind q v2 (bind p v1 (d,c,b,a))
+
+-- ============= Printing in 𝜷-Normal Form =========================
+type StringEnv = (String,String,String,String)
+
+bindE :: Pat (a,b,c,d) t -> Expr (w,x,y,z) t -> StringEnv -> StringEnv
+bindE P1 v (e@(d,c,b,a)) = (showE e v,c,b,a)
+bindE P2 v (e@(d,c,b,a)) = (d,showE e v,b,a)
+bindE P3 v (e@(d,c,b,a)) = (d,c,showE e v,a)
+bindE P4 v (e@(d,c,b,a)) = (d,c,b,showE e v)
+bindE (PPair p1 p2) (EPair e1 e2) env = bindE p1 e1 (bindE p2 e2 env)
+bindE (PPair p1 p2) e env = bindE p2 (SND e) (bindE p1 (FST e) env)
+
+showE :: StringEnv -> (Expr (a,b,c,d) t) -> String
+showE (x,y,z,w) X1 = x
+showE (x,y,z,w) X2 = y
+showE (x,y,z,w) X3 = z
+showE (x,y,z,w) X4 = w
+showE e (EPair a b) = "("++showE e a++","++showE e b++")"
+showE e (Ap (Lam p1 p2 expr) x y) = showE (bindE p2 y (bindE p1 x e)) expr
+showE e (FST f) = "(fst " ++ showE e f ++ ")"
+showE e (SND f) = "(snd " ++ showE e f ++ ")"
+showE e (Ap oper a b) = "("++showE e a++showL e oper++showE e b++")"
+showE e (HasKey k datum) = "(haskey "++showE e k++" ?)"
+showE e (Neg x) = "(not "++showE e x++")"
+showE e (Lit n) = show n
+
+showL :: StringEnv -> Lam t -> String
+showL e (Lam p1 p2 expr) = "\\ "++showP e p1++" "++showP e p2++" -> "++showE e expr
+showL e Add = " + "
+showL e Eql = " == "
+showL e (Lift f) = "<lifted function>"
+
+showP :: StringEnv -> (Pat any t) -> String
+showP (x,y,z,w) P1 = x
+showP (x,y,z,w) P2 = y
+showP (x,y,z,w) P3 = z
+showP (x,y,z,w) P4 = w
+showP env (PPair p1 p2) = "("++showP env p1++","++showP env p2++")"
+
+instance Show (Expr (a,b,c,d) t) where
+   show x = showE ("X1","X2","X3","X4") x
+instance Show (Lam t) where
+   show x = showL ("X1","X2","X3","X4") x
+
+-- ===============================================================================================================
+-- An symbolic function Fun has two parts, a Lam that can be analyzed, and real function that can be applied
+-- ===============================================================================================================
+
+data Fun t = Fun (Lam t) t
+
+-- | We can observe a Fun by showing the Lam part.
+
+instance Show (Fun t) where
+  show (Fun lam _fun) = show lam
+
+-- ======================================================================================
+-- Operations we use to manipulate Fun. Some simple ones, and some ways to compose them.
+-- The great thing is the types completely decide what the operations do.
+-- ======================================================================================
+
+
+-- Used in projectStep, chainStep, andPStep, orStep and guardStep
+apply :: Fun t -> t
+apply (Fun e f) = f
+
+-- Used in compile (UnionLeft case)
+first :: Fun (v -> s -> v)
+first = Fun (Lam P1 P2 X1) (\ x _y -> x)
+
+-- Used in compile (UnionRight case)
+second:: Fun (v -> s -> s)
+second = Fun (Lam P1 P2 X2) (\ _x y -> y)
+
+-- Used in compile (UnionPlus case)
+plus:: Num t => Fun (t -> t -> t)
+plus = (Fun Add (+))
+
+eql :: Eq t => Fun (t -> t -> Bool)
+eql = (Fun Eql (==))
+
+constant:: Show c => c -> Fun(a -> b -> c)
+constant c = Fun (Lam P1 P2 (Lit c)) (\ x y -> c)
+
+-- Used in compile (RExclude RRestrict cases)
+rngElem:: (Ord rng,Iter f) => f rng v -> Fun(dom -> rng -> Bool)
+rngElem realset = Fun  (Lam P1 P2 (HasKey X2 realset)) (\ x y -> haskey y realset)  -- x is ignored and realset is supplied
+
+domElem:: (Ord dom,Iter f) => f dom v -> Fun(dom -> rng -> Bool)
+domElem realset = Fun  (Lam P1 P2 (HasKey X1 realset)) (\ x y -> haskey x realset)  -- x is ignored and realset is supplied
+
+rngFst:: Fun(x -> (a,b) -> a)
+rngFst = Fun (Lam P1 (PPair P2 P3) X2) (\ x (a,b) -> a)
+
+rngSnd:: Fun(x -> (a,b) -> b)
+rngSnd = Fun (Lam P1 (PPair P2 P3) X3) (\ x y -> snd y)
+
+compose1 :: Fun (t1 -> t2 -> t3) -> Fun (t1 -> t4 -> t2) -> Fun (t1 -> t4 -> t3)
+compose1 (Fun e1 f1) (Fun e2 f2) = Fun (Lam P1 P2 (Ap e1 X1 (Ap e2 X1 X2))) (\ a b -> f1 a (f2 a b))
+
+compSndL:: Fun(k -> (a,b) -> c) -> Fun(k -> d -> a) -> Fun(k -> (d,b) -> c)
+compSndL (Fun m mf) (Fun g mg) = Fun (Lam P1 (PPair P2 P3) (Ap m X1 (EPair (Ap g X1 X2) X3))) (\ x (a,b) -> mf x (mg x a,b))
+
+compSndR:: Fun(k -> (a,b) -> c) -> Fun(k -> d -> b) -> Fun(k -> (a,d) -> c)
+compSndR (Fun m mf) (Fun g mg) = (Fun (Lam P1 (PPair P2 P3) (Ap m X1 (EPair X2 (Ap g X1 X3)))) (\ x (a,b) -> mf x (a,mg x b)))
+
+compCurryR :: Fun(k -> (a,b) -> d) -> Fun(a -> c -> b) -> Fun(k -> (a,c) -> d)
+compCurryR (Fun ef f) (Fun eg g) = Fun (Lam P1 (PPair P2 P3) (Ap ef X1 (EPair X2 (Ap eg X2 X3)))) (\ x (a,b) -> f x(a,g a b))
+
+nEgate:: Fun(k -> v -> Bool) -> Fun(k -> v -> Bool)
+nEgate (Fun ef f) = Fun (Lam P1 P2 (Neg (Ap ef X1 X2))) (\ x y -> not(f x y))
+
+lift :: (a -> b -> c) -> Fun (a -> b -> c)  -- This is used in the tests, not good to use it elsewhere.
+lift f = Fun (Lift f) f
