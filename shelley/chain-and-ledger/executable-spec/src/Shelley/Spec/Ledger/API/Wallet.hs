@@ -17,7 +17,7 @@ import Shelley.Spec.Ledger.Address (Addr (..))
 import Shelley.Spec.Ledger.BaseTypes (Globals (..))
 import Shelley.Spec.Ledger.Coin (Coin (..))
 import Shelley.Spec.Ledger.Credential (Credential (..))
-import Shelley.Spec.Ledger.EpochBoundary (SnapShot (..), Stake (..), poolStake)
+import Shelley.Spec.Ledger.EpochBoundary (SnapShot (..), Stake (..), ownerStakeAndPledge, poolStake)
 import Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState
   ( esLState,
@@ -33,7 +33,6 @@ import Shelley.Spec.Ledger.Rewards
     getTopRankedPools,
     nonMyopicMemberRew,
     nonMyopicStake,
-    ownerStake, ownerPledge,
     percentile',
   )
 import Shelley.Spec.Ledger.TxData (TxOut (..))
@@ -73,8 +72,8 @@ getNonMyopicMemberRewards globals ss creds =
     topPools = getTopRankedPools rPot (Coin total) pp poolParams (fmap percentile' ls)
     mkNMMRewards ms k (ap, poolp, sigma) = nonMyopicMemberRew pp poolp rPot oPledge ms nmps ap
       where
-        oPledge = ownerPledge poolp stake (Coin total)
-        s = toShare $ ownerStake poolp stake
+        (oStake, oPledge) = ownerStakeAndPledge poolp stake (Coin total)
+        s = toShare $ oStake
         nmps = nonMyopicStake k sigma s pp topPools
 
 -- | Get the full UTxO.

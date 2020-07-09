@@ -20,7 +20,6 @@ module Shelley.Spec.Ledger.Rewards
     likelihood,
     Likelihood (..),
     leaderProbability,
-    ownerStake, ownerPledge
   )
 where
 
@@ -61,7 +60,7 @@ import Shelley.Spec.Ledger.Crypto (Crypto)
 import Shelley.Spec.Ledger.Delegation.PoolParams (poolSpec)
 import Shelley.Spec.Ledger.EpochBoundary
   ( BlocksMade (..),
-    OwnerPledge (..),
+    OwnerPledge, ownerStakeAndPledge,
     SnapShot (..),
     Stake (..),
     emptySnapShot,
@@ -338,20 +337,6 @@ memberRew (Coin f') pool (StakeShare t) (StakeShare sigma)
     (Coin c, m, _) = poolSpec pool
     m' = unitIntervalToRational m
 
-ownerPledge :: PoolParams crypto -> Stake crypto -> Coin -> OwnerPledge
-ownerPledge pool stake (Coin total)=
-  let Coin ostake = ownerStake pool stake
-      Coin pledge = _poolPledge pool
-  in if pledge <= ostake
-     then PledgeMet $ fromIntegral pledge % fromIntegral total
-     else PledgeNotMet
-
-ownerStake :: PoolParams crypto -> Stake crypto -> Coin
-ownerStake pool (Stake stake) = Set.foldl'
-          (\c o -> c + (fromMaybe (Coin 0) $ Map.lookup (KeyHashObj o) stake))
-          (Coin 0)
-          (_poolOwners pool)
-
 -- | Reward one pool
 rewardOnePool ::
   Network ->
@@ -368,8 +353,7 @@ rewardOnePool ::
 rewardOnePool network pp r blocksN blocksTotal pool (Stake stake) sigma (Coin total) addrsRew =
   rewards'
   where
-    oPledge = ownerPledge pool (Stake stake) (Coin total)
-    Coin ostake = ownerStake pool (Stake stake)
+    (Coin ostake, oPledge) = ownerStakeAndPledge pool (Stake stake) (Coin total)
     Coin maxP = maxPool pp r sigma oPledge
     appPerf = mkApparentPerformance (_d pp) sigma blocksN blocksTotal
     poolR = floor (appPerf * fromIntegral maxP)

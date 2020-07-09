@@ -14,7 +14,8 @@
 module Shelley.Spec.Ledger.EpochBoundary
   ( Stake (..),
     BlocksMade (..),
-    OwnerPledge (..),
+    OwnerPledge,
+    ownerStakeAndPledge,
     SnapShot (..),
     SnapShots (..),
     emptySnapShot,
@@ -35,7 +36,7 @@ import Cardano.Binary (FromCBOR (..), ToCBOR (..), encodeListLen, enforceSize)
 import Cardano.Prelude (NFData, NoUnexpectedThunks (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Ratio ((%))
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
@@ -43,7 +44,7 @@ import Numeric.Natural (Natural)
 import Shelley.Spec.Ledger.Address (Addr (..))
 import Shelley.Spec.Ledger.Coin (Coin (..))
 import Shelley.Spec.Ledger.Core (dom, (▷), (◁))
-import Shelley.Spec.Ledger.Credential (Credential, Ptr, StakeReference (..))
+import Shelley.Spec.Ledger.Credential (Credential (..), Ptr, StakeReference (..))
 import Shelley.Spec.Ledger.Crypto
 import Shelley.Spec.Ledger.Delegation.Certificates
   ( StakeCreds (..),
@@ -51,7 +52,7 @@ import Shelley.Spec.Ledger.Delegation.Certificates
   )
 import Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
 import Shelley.Spec.Ledger.PParams (PParams, PParams' (..), _a0, _nOpt)
-import Shelley.Spec.Ledger.TxData (PoolParams, RewardAcnt, TxOut (..), getRwdCred)
+import Shelley.Spec.Ledger.TxData (PoolParams (..), RewardAcnt, TxOut (..), getRwdCred)
 import Shelley.Spec.Ledger.UTxO (UTxO (..))
 
 -- | Blocks made
@@ -144,6 +145,22 @@ obligation pp (StakeCreds stakeKeys) (StakePools stakePools) =
 
 data OwnerPledge = PledgeMet Rational
   | PledgeNotMet
+
+ownerStakeAndPledge ::
+  PoolParams crypto ->
+  Stake crypto ->
+  Coin ->
+  (Coin, OwnerPledge)
+ownerStakeAndPledge pool (Stake stake) (Coin total)=
+  let Coin ostake = Set.foldl'
+          (\c o -> c + (fromMaybe (Coin 0) $ Map.lookup (KeyHashObj o) stake))
+          (Coin 0)
+          (_poolOwners pool)
+      Coin pledgeAmount = _poolPledge pool
+      pledge = if pledgeAmount <= ostake
+        then PledgeMet $ fromIntegral pledgeAmount % fromIntegral total
+        else PledgeNotMet
+  in (Coin ostake, pledge)
 
 -- | Calculate maximal pool reward
 maxPool :: PParams -> Coin -> Rational -> OwnerPledge -> Coin
