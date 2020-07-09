@@ -9,7 +9,6 @@ where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
 import Data.Ratio ((%))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -34,9 +33,10 @@ import Shelley.Spec.Ledger.Rewards
     getTopRankedPools,
     nonMyopicMemberRew,
     nonMyopicStake,
+    ownerStake, ownerPledge,
     percentile',
   )
-import Shelley.Spec.Ledger.TxData (PoolParams (..), TxOut (..))
+import Shelley.Spec.Ledger.TxData (TxOut (..))
 import Shelley.Spec.Ledger.UTxO (UTxO (..))
 
 -- | Calculate the Non-Myopic Pool Member Rewards for a set of credentials.
@@ -71,18 +71,11 @@ getNonMyopicMemberRewards globals ss creds =
         ls
         poolParams
     topPools = getTopRankedPools rPot (Coin total) pp poolParams (fmap percentile' ls)
-    mkNMMRewards ms k (ap, poolp, sigma) = if checkPledge poolp
-                                           then nonMyopicMemberRew pp poolp rPot s ms nmps ap
-                                           else 0
+    mkNMMRewards ms k (ap, poolp, sigma) = nonMyopicMemberRew pp poolp rPot oPledge ms nmps ap
       where
-        s = (toShare . _poolPledge) poolp
+        oPledge = ownerPledge poolp stake (Coin total)
+        s = toShare $ ownerStake poolp stake
         nmps = nonMyopicStake k sigma s pp topPools
-        checkPledge pool =
-          let ostake = Set.foldl'
-                (\c o -> c + (fromMaybe (Coin 0) $ Map.lookup (KeyHashObj o) (unStake stake)))
-                (Coin 0)
-                (_poolOwners pool)
-          in _poolPledge poolp <= ostake
 
 -- | Get the full UTxO.
 getUTxO ::

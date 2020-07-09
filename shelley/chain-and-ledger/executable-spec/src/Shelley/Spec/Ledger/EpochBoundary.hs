@@ -14,6 +14,7 @@
 module Shelley.Spec.Ledger.EpochBoundary
   ( Stake (..),
     BlocksMade (..),
+    OwnerPledge (..),
     SnapShot (..),
     SnapShots (..),
     emptySnapShot,
@@ -141,9 +142,13 @@ obligation pp (StakeCreds stakeKeys) (StakePools stakePools) =
   (_keyDeposit pp) * (fromIntegral $ length stakeKeys)
     + (_poolDeposit pp) * (fromIntegral $ length stakePools)
 
+data OwnerPledge = PledgeMet Rational
+  | PledgeNotMet
+
 -- | Calculate maximal pool reward
-maxPool :: PParams -> Coin -> Rational -> Rational -> Coin
-maxPool pc (Coin r) sigma pR = floor $ factor1 * factor2
+maxPool :: PParams -> Coin -> Rational -> OwnerPledge -> Coin
+maxPool _pc _r _sigma PledgeNotMet = 0
+maxPool pc (Coin r) sigma (PledgeMet pR) = floor $ factor1 * factor2
   where
     a0 = _a0 pc
     nOpt = _nOpt pc
