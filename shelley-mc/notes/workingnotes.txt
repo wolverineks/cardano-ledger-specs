@@ -1,0 +1,62 @@
+
+----------------------------------------------------------------
+July 29, 2020
+-- Notes for Goguen meeting
+-- Strategy make small non-breaking changes to master
+-- for as long as we can.
+
+Abstractly we have:
+
+data TxOut crypto where
+   TxOut:: Crypto crypto => Addr crypto ->  Coin -> TxOut crypto
+
+
+
+newtype UTxO crypto = UTxO {unUTxO :: Map (TxIn crypto) (TxOut crypto)}
+
+We should change these to
+
+data TxOut crypto v where
+   TxOut:: (Val v,Crypto crypto) => Addr crypto -> v -> TxOut crypto
+
+newtype UTxO crypto v = UTxO {unUTxO :: Map (TxIn crypto) (TxOut crypto v)}
+
+we can keep this in master by making Coin the only instance of Val
+
+This would mean change every file that uses the types (TxOut crypto) and (UTxO crypto) to use
+(TxOut crypto v) and (UTxO crypto v)
+
+UTxO is mentioned (as a type) in
+src/Shelley/Spec/Ledger/API/Wallet.hs
+src/Shelley/Spec/Ledger/STS/Utxo.hs
+src/Shelley/Spec/Ledger/STS/Chain.hs
+src/Shelley/Spec/Ledger/EpochBoundary.hs
+src/Shelley/Spec/Ledger/LedgerState.hs
+src/Shelley/Spec/Ledger/UTxO.hs
+src/Shelley/Spec/Ledger/Genesis.hs
+
+TxOut is mentioned in
+src/Shelley/Spec/Ledger/STS/Utxo.hs
+src/Shelley/Spec/Ledger/UTxO.hs
+src/Shelley/Spec/Ledger/TxData.hs
+
+functions:: foo :: Crypto crypto => ...... UTxO crypto .......
+            foo :: (Val v,Crypto crypto) => ...... UTxO crypto v .......
+            foo :: CV c v =>  ...... UTxO crypto v .......
+
+type CV c v = (Val v, Crypto c)
+The idea is to make these things parametric over c and v.
+Then the changed code should still work when we fix v to Coin.
+If we add a method asCoin to class Val
+
+class Val t where
+  vadd: t -> t -> t
+  ...
+  asCoin :: t -> Coin
+  deSerialise:: ShortByteString -> t
+
+In administrative calculations we can do things like
+
+  TxOut addr coin ->  .... foo coin
+changes to
+  TxOut addr val -> .... foo (asCoin val)
