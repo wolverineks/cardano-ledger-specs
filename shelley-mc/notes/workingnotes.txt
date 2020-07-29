@@ -60,3 +60,11 @@ In administrative calculations we can do things like
   TxOut addr coin ->  .... foo coin
 changes to
   TxOut addr val -> .... foo (asCoin val)
+
+
+---------------------------------------------------------------
+Where are the specs
+
+https://github.com/input-output-hk/cardano-ledger-specs/tree/master/shelley-mc/formal-spec
+
+https://github.com/input-output-hk/cardano-ledger-specs/tree/nonbreaking-multiassets/goguen/formal-spec
