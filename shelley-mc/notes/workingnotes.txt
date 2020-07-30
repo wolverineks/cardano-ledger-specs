@@ -1,5 +1,40 @@
 ----------------------------------------------------------------
 July 30, 2020
+-- Notes on the potential scripting language
+
+An advantage of a primitive scripting language would be that common
+operations could be executed much cheaper than with Plutus, and with a
+much higher degree of trust in the correctness of the implementation
+(there is a real possibility of losing funds from bad or malicious
+scripts, much less so if there is a very primitive language that
+anyone can understand).
+
+Two ideas about features that might be nice in the scripting language:
+
+- Locking an output with a script that allows anyone to spend from
+  that output, as long as it is the only input spending Ada in the
+  transaction, its fee is smaller than a certain value (specified by
+  the primitive) and it produces a single output that is locked
+  exactly the way the input was. This is to allow a person A to send B
+  assets that are not Ada, without requiring A to also send some Ada
+  to B (because of the minimum deposit). There is an attack here
+  though: A could make some tokens that inflate the size of to output
+  to the point where all the Ada are locked up by the minimum
+  deposit. If B can't spend or unforge the tokens, B has essentially
+  lost some Ada. One way to prevent this would be to include a
+  whitelist in the primitive.
+
+- An exchange primitive, that allows a seller to specify a Value, and
+  a transaction that creates an output that locks that Value in a way
+  specified by a parameter can then spend that output. This has to be
+  implemented carefully as not to allow spending multiple such outputs
+  when only one of them should be spendable.
+
+It might be possible to implement both of these with the same
+primitive, depending on how exactly those would work.
+
+----------------------------------------------------------------
+July 30, 2020
 -- Andre's notes on operations the MC spec uses on Value
 
 These can be turned into the operations in the Val class. Note that
