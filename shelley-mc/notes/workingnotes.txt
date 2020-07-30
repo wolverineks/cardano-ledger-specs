@@ -1,3 +1,44 @@
+----------------------------------------------------------------
+July 30, 2020
+-- Andre's notes on operations the MC spec uses on Value
+
+These can be turned into the operations in the Val class. Note that
+everything here ignores serialization and any operation not in the MC
+spec.
+
+It should be a partially ordered monoid (with decidable equality)
+
+- 0 : Value
+- _+_ : Value -> Value -> Value
+- _>_, _=_ : Value -> Value -> Bool
+
+that embeds from and projects to Coin
+
+- coinToValue : Coin -> Value
+- valueToCoin : Value -> Coin
+
+with two extra operations
+
+- valueSize : Value -> N
+- getScripts : Value -> P PolicyID
+
+Assuming we want to express Value as Value = Coin x M (which looks a
+lot like CompactValue), we can get away with a partially ordered
+monoid M (as above) with the operations
+
+- valueSizeM : M -> N
+- getScriptsM : M -> P PolicyID
+
+This gives us a class that I'll call PreVal here, that M should
+satisfy so that we can derive PreVal M => Val (Coin x M). The
+non-trivial operations are:
+
+- valueSize (x, m) = 1 + valueSizeM m
+- getScripts (x, m) = getScriptsM m + if x = 0 then {} else {adaID}
+
+Interestingly, getScripts(M) is a monoid morphism, if P PolicyID is
+equipped with + := sup, but there is probably no way valueSize is
+going to be one.
 
 ----------------------------------------------------------------
 July 29, 2020
