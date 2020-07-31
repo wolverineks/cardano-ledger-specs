@@ -1,5 +1,35 @@
+July 31, 2020 Tim Sheard
+-- Some thoughts on structuring a scripting langauge as shown in the paper
+UTXOma: UTXO with Multi-Asset Support
+
+
+module Script where
+
+data Connect pred x = TT | FF | Pred pred | And [x] | Or [x] | Not x
+
+data Fix f = In (f (Fix f))
+
+eval :: (pred -> env -> Bool) -> env -> Fix (Connect pred) -> Bool
+eval run env (In x) =
+  case x of
+    TT -> True
+    FF -> False
+    Pred p -> run p env
+    And xs -> and (map (eval run env) xs)
+    Or xs-> or (map (eval run env) xs)
+    Not x -> not(eval run env x)
+
 ----------------------------------------------------------------
-July 30, 2020
+July 30, 2020 Tim Sheard
+-- Thoughts on requriements of for a Value type
+
+Properties of Value representation
+1) Canonical representation (Only 1 concrete value for every thing with the same meaning)
+2) Ada-only has the same CBOR representation as Coin
+3) Supports the "mathematical properties" of Value
+
+----------------------------------------------------------------
+July 30, 2020 Andre
 -- Notes on the potential scripting language
 
 An advantage of a primitive scripting language would be that common
@@ -144,3 +174,6 @@ Where are the specs
 https://github.com/input-output-hk/cardano-ledger-specs/tree/master/shelley-mc/formal-spec
 
 https://github.com/input-output-hk/cardano-ledger-specs/tree/nonbreaking-multiassets/goguen/formal-spec
+
+Polina's original PRfor multi-assets
+https://github.com/input-output-hk/cardano-ledger-specs/pull/1561/files
