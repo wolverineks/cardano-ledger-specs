@@ -2,6 +2,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
 
 -- | Support for multiple (Shelley-based) eras in the ledger.
 module Cardano.Ledger.Era
@@ -21,6 +27,7 @@ import Data.Coerce (Coercible, coerce)
 import Data.Kind (Type)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
+import GHC.Generics (Generic1 (..), Generic (..), U1 (..), (:+:)(..), (:*:)(..), K1 (..), M1 (..), V1)
 
 --------------------------------------------------------------------------------
 -- Era
@@ -123,3 +130,58 @@ translateEraMaybe ::
   Maybe (f era)
 translateEraMaybe ctxt =
   either (const Nothing) Just . runExcept . translateEra ctxt
+
+
+--------------------------------------------------------------------------------------------
+-- Generic support
+--------------------------------------------------------------------------------------------
+
+gTranslateEra :: forall era (f :: * -> *).
+  ( Generic1 f
+  , GTranslateEra era (Rep1 f)
+  , TranslationError era f ~ Void
+  ) =>
+  TranslationContext era ->
+  f (PreviousEra era) ->
+  Except (TranslationError era f) (f era)
+gTranslateEra ctxt x = fromCurrentRep <$> gTranslateEra' ctxt prevRep
+  where
+    prevRep :: Rep1 f (PreviousEra era)
+    prevRep = from1 x
+    fromCurrentRep :: Rep1 f era -> f era
+    fromCurrentRep = to1
+
+class GTranslateEra era f where
+  gTranslateEra' ::
+    TranslationContext era ->
+    f (PreviousEra era) ->
+    Except Void (f era)
+
+instance GTranslateEra era U1 where
+  gTranslateEra' _ctxt U1 = pure U1
+
+instance (GTranslateEra era f, GTranslateEra era g) => GTranslateEra era (f :+: g) where
+  gTranslateEra' ctxt (L1 f) = L1 <$> gTranslateEra' ctxt f
+  gTranslateEra' ctxt (R1 g) = R1 <$> gTranslateEra' ctxt g
+
+instance (GTranslateEra era f, GTranslateEra era g) => GTranslateEra era (f :*: g) where
+  gTranslateEra' ctxt (f :*: g) = (:*:)  <$> gTranslateEra' ctxt f <*> gTranslateEra' ctxt g
+
+instance (GTranslateEra era f) => GTranslateEra era (M1 i t f) where
+  gTranslateEra' ctxt (M1 f) = M1 <$> gTranslateEra' ctxt f
+
+instance GTranslateEra era V1 where
+  gTranslateEra' ctxt v = undefined
+
+-- type family EraParam (era :: *) (f :: *) where
+  -- EraParam era (f era) = 'True
+  -- EraParam era f = 'False
+
+instance (TranslateEra era f) => GTranslateEra era (K1 i (f era)) where
+  gTranslateEra' ctxt (K1 x) = something
+    where
+      something :: Either Void (K1 (f era) p)
+      something = K1 <$> foo
+      foo :: Either Void (f era)
+      foo = _help
+
