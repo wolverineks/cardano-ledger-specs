@@ -7,7 +7,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 -- | Support for multiple (Shelley-based) eras in the ledger.
 module Cardano.Ledger.Era
@@ -21,6 +23,7 @@ module Cardano.Ledger.Era
   )
 where
 
+import Data.Proxy (Proxy (..))
 import qualified Cardano.Ledger.Crypto as CryptoClass
 import Control.Monad.Except (Except, runExcept)
 import Data.Coerce (Coercible, coerce)
@@ -28,6 +31,7 @@ import Data.Kind (Type)
 import Data.Typeable (Typeable)
 import Data.Void (Void, absurd)
 import GHC.Generics (Generic1 (..), Generic (..), U1 (..), (:+:)(..), (:*:)(..), K1 (..), M1 (..), V1)
+import Data.Maybe (Maybe (..))
 
 --------------------------------------------------------------------------------
 -- Era
@@ -88,6 +92,7 @@ type family TranslationContext era :: Type
 -- its predecessor, but not necessarily its successor. Moreover, one could argue
 -- that it makes more sense to define the translation from era A to era B where
 -- era B is defined, than where era A is defined.
+
 class (Era era, Era (PreviousEra era)) => TranslateEra era f where
   -- | Most translations should be infallible (default instance), but we leave
   -- the door open for partial translations.
@@ -137,30 +142,30 @@ translateEraMaybe ctxt =
 --------------------------------------------------------------------------------------------
 
 gTranslateEra :: forall era (f :: * -> *).
-  ( Generic1 f
-  , GTranslateEra era (Rep1 f)
+  ( Generic (f era)
+  , Generic (f (PreviousEra era))
+  , GTranslateEra era (Rep (f (PreviousEra era))) (Rep (f era))
   , TranslationError era f ~ Void
   ) =>
   TranslationContext era ->
   f (PreviousEra era) ->
   Except (TranslationError era f) (f era)
-gTranslateEra ctxt x = fromCurrentRep <$> gTranslateEra' ctxt prevRep
+gTranslateEra ctxt x = fromCurrentRep <$> gTranslateEra' eraProxy ctxt prevRep
   where
-    prevRep :: Rep1 f (PreviousEra era)
-    prevRep = from1 x
-    fromCurrentRep :: Rep1 f era -> f era
-    fromCurrentRep = to1
+    eraProxy = Proxy :: Proxy era
+    prevRep :: Rep f (PreviousEra era)
+    prevRep = from x
+    fromCurrentRep :: Rep f era -> f era
+    fromCurrentRep = to
 
-class GTranslateEra era f where
-  gTranslateEra' ::
-    TranslationContext era ->
-    f (PreviousEra era) ->
-    Except Void (f era)
+class GTranslateEra era prev current | current era -> prev where
+  gTranslateEra' :: proxy era -> TranslationContext era -> prev x -> Except Void (current x)
 
-instance GTranslateEra era U1 where
-  gTranslateEra' _ctxt U1 = pure U1
+instance (PreviousEra era ~ e0) => GTranslateEra era (U1 e0) (U1 era) where
+  gTranslateEra' _proxy _ctxt U1 = pure U1
 
-instance (GTranslateEra era f, GTranslateEra era g) => GTranslateEra era (f :+: g) where
+{-
+instance (GTranslateEra era f, GTranslateEra era g) => GTranslateEra era ((f :+: g) where
   gTranslateEra' ctxt (L1 f) = L1 <$> gTranslateEra' ctxt f
   gTranslateEra' ctxt (R1 g) = R1 <$> gTranslateEra' ctxt g
 
@@ -173,15 +178,40 @@ instance (GTranslateEra era f) => GTranslateEra era (M1 i t f) where
 instance GTranslateEra era V1 where
   gTranslateEra' ctxt v = undefined
 
--- type family EraParam (era :: *) (f :: *) where
-  -- EraParam era (f era) = 'True
-  -- EraParam era f = 'False
-
-instance (TranslateEra era f) => GTranslateEra era (K1 i (f era)) where
-  gTranslateEra' ctxt (K1 x) = something
+instance (GTranslateBranch era x (EraParam era x)) => GTranslateEra era (K1 i x) where
+  gTranslateEra' ctxt arg = K1 <$> translationResult
     where
-      something :: Either Void (K1 (f era) p)
-      something = K1 <$> foo
-      foo :: Either Void (f era)
-      foo = _help
+    foo0 :: K1 i x (PreviousEra era)
+    foo0 = arg
+    foo1 :: x
+    foo1 = unK1 foo0
+    foo :: Prev era x (EraParam era x)
+    foo = undefined
+    translationResult ::  Except Void x
+    translationResult = gTranslateEraBranch eraProxy tfProxy ctxt foo
+    --result = gTranslateEraBranch eraProxy tfProxy ctxt x :: x
+    eraProxy = Proxy :: Proxy era
+    tfProxy :: Proxy (EraParam era x)
+    tfProxy = undefined
 
+
+type family EraParam (era :: *) (f :: *) where
+  EraParam era (g era) = 'Just g
+  EraParam era g = 'Nothing
+
+class GTranslateBranch era x (m :: Maybe (* -> *)) where
+  type Prev era x m :: *
+  gTranslateEraBranch :: proxy1 era -> proxy2 m -> TranslationContext era -> Prev era x m -> Except Void x
+
+-- era appears as a type parameter
+instance
+  ( TranslationError era f ~ Void, x ~ f era, TranslateEra era f)
+   => GTranslateBranch era x ('Just f) where
+  type Prev era x ('Just f) = f (PreviousEra era)
+  gTranslateEraBranch _ _ = translateEra
+
+-- era doesnt appear as a type parameter
+instance GTranslateBranch era x 'Nothing where
+  type Prev era x 'Nothing = x
+  gTranslateEraBranch _ _ ctxt x = pure x
+-}
