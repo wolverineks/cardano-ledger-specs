@@ -42,7 +42,7 @@ import Data.Word (Word64, Word8)
 import GHC.Generics (Generic)
 import GHC.Records (HasField (getField))
 import NoThunks.Class (NoThunks (..))
-import Shelley.Spec.Ledger.BaseTypes (Globals (..), ShelleyBase, invalidKey)
+import Shelley.Spec.Ledger.BaseTypes (Globals (..), Network, ShelleyBase, invalidKey, networkId)
 import Shelley.Spec.Ledger.Coin (Coin)
 import Shelley.Spec.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Shelley.Spec.Ledger.LedgerState (PState (..))
@@ -52,6 +52,7 @@ import Shelley.Spec.Ledger.TxBody
   ( DCert (..),
     PoolCert (..),
     PoolParams (..),
+    getRwdNetwork,
   )
 
 data POOL (era :: Type)
@@ -75,6 +76,9 @@ data PoolPredicateFailure era
   | StakePoolCostTooLowPOOL
       !Coin -- The stake pool cost listed in the Pool Registration Certificate
       !Coin -- The minimum stake pool cost listed in the protocol parameters
+  | WrongNetworkPOOL
+      !Network
+      !(KeyHash 'StakePool (Crypto era))
   deriving (Show, Eq, Generic)
 
 instance NoThunks (PoolPredicateFailure era)
@@ -110,6 +114,8 @@ instance
       encodeListLen 2 <> toCBOR (2 :: Word8) <> toCBOR ct
     StakePoolCostTooLowPOOL pc mc ->
       encodeListLen 3 <> toCBOR (3 :: Word8) <> toCBOR pc <> toCBOR mc
+    WrongNetworkPOOL nid kh ->
+      encodeListLen 3 <> toCBOR (4 :: Word8) <> toCBOR nid <> toCBOR kh
 
 instance
   (Era era) =>
@@ -132,6 +138,10 @@ instance
         pc <- fromCBOR
         mc <- fromCBOR
         pure (3, StakePoolCostTooLowPOOL pc mc)
+      4 -> do
+        nid <- fromCBOR
+        kh <- fromCBOR
+        pure (3, WrongNetworkPOOL nid kh)
       k -> invalidKey k
 
 poolDelegationTransition ::
@@ -146,6 +156,10 @@ poolDelegationTransition = do
   case c of
     DCertPool (RegPool poolParam) -> do
       -- note that pattern match is used instead of cwitness, as in the spec
+
+      ni <- liftSTS $ asks networkId
+      let ni' = getRwdNetwork (_poolRAcnt poolParam)
+      ni == ni' ?! WrongNetworkPOOL ni' (_poolId poolParam)
 
       let poolCost = _poolCost poolParam
           minPoolCost = getField @"_minPoolCost" pp
