@@ -209,7 +209,7 @@ import Shelley.Spec.Ledger.PParams
     Update (..),
     emptyPPPUpdates,
   )
-import Shelley.Spec.Ledger.RewardProvenance (Desirability (..), RewardProvenance (..))
+import Shelley.Spec.Ledger.RewardProvenance (RewardProvenance (..))
 import Shelley.Spec.Ledger.RewardUpdate
   ( FreeVars (..),
     Pulser,
@@ -223,11 +223,8 @@ import Shelley.Spec.Ledger.RewardUpdate
 import Shelley.Spec.Ledger.Rewards
   ( Likelihood (..),
     NonMyopic (..),
-    PerformanceEstimate (..),
     aggregateRewards,
     applyDecay,
-    desirability,
-    percentile',
     sumRewards,
   )
 import Shelley.Spec.Ledger.Serialization (mapFromCBOR, mapToCBOR)
@@ -1264,7 +1261,7 @@ startStep slotsPerEpoch b@(BlocksMade b') es@(EpochState acnt ss ls pr _ nm) max
           pulseSize
           free
           (StrictSeq.fromList $ Map.elems poolParams)
-          (Map.empty, Map.empty)
+          Map.empty
    in (Pulsing rewsnap pulser)
 
 -- Phase 2
@@ -1306,37 +1303,17 @@ completeRupd
             rewR = oldr,
             rewDeltaT1 = (Coin deltaT1),
             rewNonMyopic = nm,
-            rewTotalStake = totalstake,
-            rewRPot = rpot,
-            rewSnapshots = snaps,
-            rewa0 = a0,
-            rewnOpt = nOpt
+            rewSnapshots = snaps
           }
         )
       pulser
     ) = do
-    let combine (rs, likely) provPools (rewprov@RewardProvenance {pools = old}) =
+    let combine rs provPools (rewprov@RewardProvenance {pools = old}) =
           rewprov
             { deltaR2 = oldr <-> (sumRewards rewsnap rs),
-              pools = Map.union provPools old,
-              desirabilities = (Map.foldlWithKey' addDesireability Map.empty likely)
+              pools = Map.union provPools old
             }
-        -- A function to compute the 'desirablity' aggregate. Called only if we are computing
-        -- provenance. Adds nested pair ('key',(LikeliHoodEstimate,Desirability)) to the Map 'ans'
-        addDesireability ans key likelihood =
-          let SnapShot _ _ poolParams = _pstakeGo snaps
-              estimate = (percentile' likelihood)
-           in Map.insert
-                key
-                ( Desirability
-                    { hitRateEstimate = unPerformanceEstimate estimate,
-                      desirabilityScore = case Map.lookup key poolParams of
-                        Just ppx -> desirability (a0, nOpt) rpot ppx estimate totalstake
-                        Nothing -> 0
-                    }
-                )
-                ans
-    (rs_, newLikelihoods) <- liftProv (completeM pulser) Map.empty combine
+    rs_ <- liftProv (completeM pulser) Map.empty combine
     let deltaR2 = oldr <-> (sumRewards rewsnap rs_)
     pure $
       RewardUpdate
@@ -1344,7 +1321,7 @@ completeRupd
           deltaR = ((invert $ toDeltaCoin deltaR1) <> toDeltaCoin deltaR2),
           rs = rs_,
           deltaF = (invert (toDeltaCoin $ _feeSS snaps)),
-          nonMyopic = (updateNonMyopic nm oldr newLikelihoods)
+          nonMyopic = nm
         }
 
 -- | To create a reward update, run all 3 phases

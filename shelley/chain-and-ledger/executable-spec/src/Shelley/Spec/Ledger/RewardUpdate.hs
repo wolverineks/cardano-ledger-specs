@@ -45,7 +45,6 @@ import Data.Group (invert)
 import Data.Kind (Type)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
 import Data.Pulse (Pulsable (..), completeM, foldlM')
 import Data.Ratio ((%))
 import Data.Sequence.Strict (StrictSeq)
@@ -73,11 +72,8 @@ import Shelley.Spec.Ledger.PParams (ProtVer (..))
 import Shelley.Spec.Ledger.RewardProvenance (RewardProvenancePool (..))
 import qualified Shelley.Spec.Ledger.RewardProvenance as RP
 import Shelley.Spec.Ledger.Rewards
-  ( Likelihood,
-    NonMyopic,
+  ( NonMyopic,
     Reward (..),
-    leaderProbability,
-    likelihood,
     rewardOnePool,
   )
 import Shelley.Spec.Ledger.Serialization (decodeRecordNamed)
@@ -86,10 +82,7 @@ import Shelley.Spec.Ledger.TxBody (PoolParams (..))
 -- ===============================================================
 
 -- | The result of reward calculation is a pair of aggregate Maps.
-type RewardAns c =
-  ( Map (Credential 'Staking c) (Set (Reward c)),
-    Map (KeyHash 'StakePool c) Likelihood
-  )
+type RewardAns c = Map (Credential 'Staking c) (Set (Reward c))
 
 -- | The provenance we collect
 type KeyHashPoolProvenance c = Map (KeyHash 'StakePool c) (RewardProvenancePool c)
@@ -281,16 +274,14 @@ rewardStakePool
         addrsRew,
         totalStake,
         activeStake,
-        asc,
         totalBlocks,
         r,
-        slotsPerEpoch,
         pp_d,
         pp_a0,
         pp_nOpt
       }
     )
-  (m1, m2)
+  m1
   pparams = do
     let hk = _poolId pparams
         blocksProduced = Map.lookup hk b
@@ -298,16 +289,11 @@ rewardStakePool
         Coin pstake = fold s
         sigma = if totalStake == 0 then 0 else fromIntegral pstake % fromIntegral totalStake
         sigmaA = if activeStake == 0 then 0 else fromIntegral pstake % fromIntegral activeStake
-        ls =
-          likelihood
-            (fromMaybe 0 blocksProduced)
-            (leaderProbability asc sigma pp_d)
-            slotsPerEpoch
     case blocksProduced of
-      Nothing -> pure (m1, Map.insert hk ls m2)
+      Nothing -> pure m1
       Just n -> do
         m <- rewardOnePool (pp_d, pp_a0, pp_nOpt) r n totalBlocks pparams actgr sigma sigmaA (Coin totalStake) addrsRew
-        pure (Map.unionWith Set.union m m1, Map.insert hk ls m2)
+        pure (Map.unionWith Set.union m m1)
 
 -- ================================================================
 
