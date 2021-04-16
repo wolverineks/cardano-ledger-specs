@@ -35,6 +35,7 @@ module Shelley.Spec.Ledger.EpochBoundary
 where
 
 import Cardano.Binary (FromCBOR (..), ToCBOR (..), encodeListLen)
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Crypto as CC (Crypto)
 import Cardano.Ledger.Era
 import Cardano.Ledger.Val ((<+>), (<×>))
@@ -101,6 +102,51 @@ deriving newtype instance
 -- things up considerably. That is the role of deserialiseAddrStakeRef. It returns (Just stake)
 -- for the two cases that matter, and Nothing for the other two cases.
 
+aggregateUtxoCoinByCredentialPTR ::
+  forall era.
+  Era era =>
+  Ptr ->
+  Map Ptr (Credential 'Staking (Crypto era)) ->
+  Core.Value era ->
+  Map (Credential 'Staking (Crypto era)) Coin ->
+  Map (Credential 'Staking (Crypto era)) Coin
+aggregateUtxoCoinByCredentialPTR p ptrs c ans =
+  case Map.lookup p ptrs of
+    Just cred -> Map.insertWith (<>) cred (Val.coin c) ans
+    Nothing -> ans
+
+aggregateUtxoCoinByCredentialBASEA ::
+  forall era.
+  Era era =>
+  Credential 'Staking (Crypto era) ->
+  Core.Value era ->
+  Map (Credential 'Staking (Crypto era)) Coin ->
+  Map (Credential 'Staking (Crypto era)) Coin
+aggregateUtxoCoinByCredentialBASEA stakeAddress c ans =
+  Map.insertWith (<>) stakeAddress (Val.coin c) ans
+
+aggregateUtxoCoinByCredentialBASEB ::
+  forall era.
+  Era era =>
+  Credential 'Staking (Crypto era) ->
+  Core.Value era ->
+  Map (Credential 'Staking (Crypto era)) Coin ->
+  Map (Credential 'Staking (Crypto era)) Coin
+aggregateUtxoCoinByCredentialBASEB stakeAddress c ans =
+  Map.insertWith (<>) stakeAddress (Val.coin c) ans
+
+aggregateUtxoCoinByCredentialBASE ::
+  forall era.
+  Era era =>
+  Credential 'Staking (Crypto era) ->
+  Core.Value era ->
+  Map (Credential 'Staking (Crypto era)) Coin ->
+  Map (Credential 'Staking (Crypto era)) Coin
+aggregateUtxoCoinByCredentialBASE stakeAddress c ans =
+  if Map.member stakeAddress ans
+    then aggregateUtxoCoinByCredentialBASEA @era stakeAddress c ans
+    else aggregateUtxoCoinByCredentialBASEB @era stakeAddress c ans
+
 -- | Sum up all the Coin for each staking Credential
 aggregateUtxoCoinByCredential ::
   forall era.
@@ -114,12 +160,8 @@ aggregateUtxoCoinByCredential ptrs (UTxO u) initial =
   where
     accum out ans =
       case (getField @"address" out, getField @"value" out) of
-        (Addr _ _ (StakeRefPtr p), c) ->
-          case Map.lookup p ptrs of
-            Just cred -> Map.insertWith (<>) cred (Val.coin c) ans
-            Nothing -> ans
-        (Addr _ _ (StakeRefBase hk), c) ->
-          Map.insertWith (<>) hk (Val.coin c) ans
+        (Addr _ _ (StakeRefPtr p), c) -> aggregateUtxoCoinByCredentialPTR @era p ptrs c ans
+        (Addr _ _ (StakeRefBase hk), c) -> aggregateUtxoCoinByCredentialBASE @era hk c ans
         _other -> ans
 
 -- | Get stake of one pool
