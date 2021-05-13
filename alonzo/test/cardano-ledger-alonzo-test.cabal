@@ -79,6 +79,7 @@ test-suite cardano-ledger-alonzo-test
     cardano-crypto-class,
     cardano-ledger-alonzo,
     cardano-ledger-alonzo-test,
+    cardano-ledger-omega,
     cardano-ledger-shelley-ma,
     cardano-ledger-core,
     cardano-ledger-shelley-ma-test,

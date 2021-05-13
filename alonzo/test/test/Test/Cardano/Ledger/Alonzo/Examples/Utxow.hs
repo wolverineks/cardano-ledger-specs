@@ -114,13 +114,15 @@ import Shelley.Spec.Ledger.TxBody
     Wdrl (..),
   )
 import Shelley.Spec.Ledger.UTxO (UTxO (..), makeWitnessVKey, txid)
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C_Crypto)
 import Test.Shelley.Spec.Ledger.Generator.EraGen (genesisId)
 import Test.Shelley.Spec.Ledger.Utils (applySTSTest, mkKeyPair, runShelleyBase)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase, (@?=))
+import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Proof (Proof (Alonzo), Mock, Evidence (..))
+import qualified Cardano.Ledger.Updaters as O
 
-type A = AlonzoEra C_Crypto
+type A = AlonzoEra Mock
 
 -- =======================
 -- Setup the initial state
@@ -132,40 +134,47 @@ testEpochInfo = fixedEpochInfo (EpochSize 100) (mkSlotLength 1)
 testSystemStart :: SystemStart
 testSystemStart = SystemStart $ posixSecondsToUTCTime 0
 
-pp :: PParams A
-pp =
-  def
-    { _costmdls = Map.singleton PlutusV1 (CostModel mempty),
-      _maxValSize = 1000000000,
-      _maxTxExUnits = ExUnits 1000000 1000000,
-      _maxBlockExUnits = ExUnits 1000000 1000000
-    }
+pp' :: Proof era -> Core.PParams era
+pp' proof =
+  O.newPParams
+    proof
+    [ O.Costmdls $ Map.singleton PlutusV1 (CostModel mempty),
+      O.MaxValSize 1000000000,
+      O.MaxTxExUnits $ ExUnits 1000000 1000000,
+      O.MaxBlockExUnits $ ExUnits 1000000 1000000
+    ]
 
-utxoEnv :: UtxoEnv A
-utxoEnv =
+pp :: PParams A
+pp = pp' (Alonzo Mock)
+
+utxoEnv' :: Proof era -> UtxoEnv era
+utxoEnv' proof =
   UtxoEnv
     (SlotNo 0)
-    pp
+    (pp' proof)
     mempty
     (GenDelegs mempty)
 
+utxoEnv :: UtxoEnv A
+utxoEnv = utxoEnv' (Alonzo Mock)
+
 -- | Create an address with a given payment script.
-scriptAddr :: Script A -> Addr C_Crypto
+scriptAddr :: Script A -> Addr Mock
 scriptAddr s = Addr Testnet pCred sCred
   where
     pCred = ScriptHashObj . hashScript @A $ s
-    (_ssk, svk) = mkKeyPair @C_Crypto (0, 0, 0, 0, 0)
+    (_ssk, svk) = mkKeyPair @Mock (0, 0, 0, 0, 0)
     sCred = StakeRefBase . KeyHashObj . hashKey $ svk
 
-someKeys :: KeyPair 'Payment C_Crypto
+someKeys :: KeyPair 'Payment Mock
 someKeys = KeyPair vk sk
   where
-    (sk, vk) = mkKeyPair @C_Crypto (0, 0, 0, 0, 1)
+    (sk, vk) = mkKeyPair @Mock (0, 0, 0, 0, 1)
 
-someAddr :: Addr C_Crypto
+someAddr :: Addr Mock
 someAddr = Addr Testnet pCred sCred
   where
-    (_ssk, svk) = mkKeyPair @C_Crypto (0, 0, 0, 0, 2)
+    (_ssk, svk) = mkKeyPair @Mock (0, 0, 0, 0, 2)
     pCred = KeyHashObj . hashKey . vKey $ someKeys
     sCred = StakeRefBase . KeyHashObj . hashKey $ svk
 
@@ -183,25 +192,25 @@ someOutput =
     (Val.inject $ Coin 1000)
     SNothing
 
-alwaysSucceedsHash1 :: ScriptHash C_Crypto
+alwaysSucceedsHash1 :: ScriptHash Mock
 alwaysSucceedsHash1 = hashScript @A $ alwaysSucceeds 1
 
-alwaysSucceedsHash2 :: ScriptHash C_Crypto
+alwaysSucceedsHash2 :: ScriptHash Mock
 alwaysSucceedsHash2 = hashScript @A $ alwaysSucceeds 2
 
-alwaysSucceedsHash3 :: ScriptHash C_Crypto
+alwaysSucceedsHash3 :: ScriptHash Mock
 alwaysSucceedsHash3 = hashScript @A $ alwaysSucceeds 3
 
-alwaysFailsHash0 :: ScriptHash C_Crypto
+alwaysFailsHash0 :: ScriptHash Mock
 alwaysFailsHash0 = hashScript @A $ alwaysFails 0
 
-alwaysFailsHash1 :: ScriptHash C_Crypto
+alwaysFailsHash1 :: ScriptHash Mock
 alwaysFailsHash1 = hashScript @A $ alwaysFails 1
 
-timelockKeys :: KeyPair 'Payment C_Crypto
+timelockKeys :: KeyPair 'Payment Mock
 timelockKeys = KeyPair vk sk
   where
-    (sk, vk) = mkKeyPair @C_Crypto (1, 2, 3, 4, 5)
+    (sk, vk) = mkKeyPair @Mock (1, 2, 3, 4, 5)
 
 timelockScript :: Word64 -> Script A
 timelockScript s =
@@ -212,19 +221,19 @@ timelockScript s =
           RequireTimeExpire (SlotNo $ 100 + s)
         ]
 
-timelockHash0 :: ScriptHash C_Crypto
+timelockHash0 :: ScriptHash Mock
 timelockHash0 = hashScript @A $ timelockScript 0
 
-timelockHash1 :: ScriptHash C_Crypto
+timelockHash1 :: ScriptHash Mock
 timelockHash1 = hashScript @A $ timelockScript 1
 
-timelockHash2 :: ScriptHash C_Crypto
+timelockHash2 :: ScriptHash Mock
 timelockHash2 = hashScript @A $ timelockScript 2
 
-timelockAddr :: Addr C_Crypto
+timelockAddr :: Addr Mock
 timelockAddr = Addr Testnet pCred sCred
   where
-    (_ssk, svk) = mkKeyPair @C_Crypto (0, 0, 0, 0, 3)
+    (_ssk, svk) = mkKeyPair @Mock (0, 0, 0, 0, 3)
     pCred = ScriptHashObj timelockHash0
     sCred = StakeRefBase . KeyHashObj . hashKey $ svk
 
@@ -299,7 +308,7 @@ validatingRedeemersEx1 =
 outEx1 :: TxOut A
 outEx1 = TxOut someAddr (Val.inject $ Coin 4995) SNothing
 
-hashWPPD :: Redeemers A -> StrictMaybe (WitnessPPDataHash C_Crypto)
+hashWPPD :: Redeemers A -> StrictMaybe (WitnessPPDataHash Mock)
 hashWPPD rs = hashWitnessPPData pp (Set.singleton PlutusV1) rs
 
 validatingBody :: TxBody A
@@ -418,7 +427,7 @@ validatingRedeemersEx3 =
   Redeemers $
     Map.singleton (RdmrPtr Cert 0) (redeemerExample3, ExUnits 5000 5000)
 
-scriptStakeCredSuceed :: StakeCredential C_Crypto
+scriptStakeCredSuceed :: StakeCredential Mock
 scriptStakeCredSuceed = ScriptHashObj alwaysSucceedsHash2
 
 validatingBodyWithCert :: TxBody A
@@ -474,7 +483,7 @@ notValidatingRedeemersEx4 =
   Redeemers $
     Map.singleton (RdmrPtr Cert 0) (redeemerExample4, ExUnits 5000 5000)
 
-scriptStakeCredFail :: StakeCredential C_Crypto
+scriptStakeCredFail :: StakeCredential Mock
 scriptStakeCredFail = ScriptHashObj alwaysFailsHash1
 
 notValidatingBodyWithCert :: TxBody A
@@ -645,13 +654,13 @@ utxoStEx6 = UTxOState utxoEx6 (Coin 0) (Coin 1000) def
 --  Example 7: Process a MINT transaction with a succeeding Plutus script.
 -- =============================================================================
 
-pidEx7 :: PolicyID C_Crypto
+pidEx7 :: PolicyID Mock
 pidEx7 = PolicyID alwaysSucceedsHash2
 
 an :: AssetName
 an = AssetName $ BS.pack "an"
 
-mintEx7 :: Value C_Crypto
+mintEx7 :: Value Mock
 mintEx7 =
   Value 0 $
     Map.singleton pidEx7 (Map.singleton an 1)
@@ -713,10 +722,10 @@ utxoStEx7 = UTxOState utxoEx7 (Coin 0) (Coin 5) def
 --  Example 8: Process a MINT transaction with a failing Plutus script.
 -- ==============================================================================
 
-pidEx8 :: PolicyID C_Crypto
+pidEx8 :: PolicyID Mock
 pidEx8 = PolicyID alwaysFailsHash1
 
-mintEx8 :: Value C_Crypto
+mintEx8 :: Value Mock
 mintEx8 =
   Value 0 $
     Map.singleton pidEx8 (Map.singleton an 1)
@@ -788,10 +797,10 @@ validatingRedeemersEx9 =
       (RdmrPtr Mint 1, (Data (Plutus.I 104), ExUnits 5000 5000))
     ]
 
-pidEx9 :: PolicyID C_Crypto
+pidEx9 :: PolicyID Mock
 pidEx9 = PolicyID timelockHash1
 
-mintEx9 :: Value C_Crypto
+mintEx9 :: Value Mock
 mintEx9 =
   Value 0 $
     Map.fromList
@@ -802,7 +811,7 @@ mintEx9 =
 outEx9 :: TxOut A
 outEx9 = TxOut someAddr (mintEx9 <+> Val.inject (Coin 4996)) SNothing
 
-timelockStakeCred :: StakeCredential C_Crypto
+timelockStakeCred :: StakeCredential Mock
 timelockStakeCred = ScriptHashObj timelockHash2
 
 validatingBodyManyScripts :: TxBody A
@@ -905,8 +914,8 @@ incorrectNetworkIDTx =
     (IsValidating True)
     SNothing
 
-extraneousKeyHash :: KeyHash 'Witness C_Crypto
-extraneousKeyHash = hashKey . snd . mkKeyPair @C_Crypto $ (0, 0, 0, 0, 99)
+extraneousKeyHash :: KeyHash 'Witness Mock
+extraneousKeyHash = hashKey . snd . mkKeyPair @Mock $ (0, 0, 0, 0, 99)
 
 missingRequiredWitnessTxBody :: TxBody A
 missingRequiredWitnessTxBody =

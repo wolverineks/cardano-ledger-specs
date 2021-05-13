@@ -47,7 +47,6 @@ import Shelley.Spec.Ledger.Slot (BlockNo (..), SlotNo (..))
 import Shelley.Spec.Ledger.TxBody (TxIn (..))
 import Shelley.Spec.Ledger.UTxO (txid)
 import qualified Test.Cardano.Ledger.Alonzo.Examples.Utxow as UTXOW
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C_Crypto)
 import Test.Shelley.Spec.Ledger.Generator.EraGen (genesisId)
 import Test.Shelley.Spec.Ledger.Utils
   ( applySTSTest,
@@ -58,8 +57,9 @@ import Test.Shelley.Spec.Ledger.Utils
   )
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase, (@?=))
+import Cardano.Ledger.Proof (Mock)
 
-type A = AlonzoEra C_Crypto
+type A = AlonzoEra Mock
 
 -- =======================
 -- Setup the initial state
@@ -72,16 +72,16 @@ bbodyEnv = BbodyEnv UTXOW.pp def
 --  Tests
 -- =======
 
-dpstate :: DPState C_Crypto
+dpstate :: DPState Mock
 dpstate = def {_dstate = def {_rewards = Map.singleton UTXOW.scriptStakeCredSuceed (Coin 1000)}}
 
 initialBBodyState :: BbodyState A
 initialBBodyState = BbodyState (LedgerState UTXOW.initialUtxoSt dpstate) (BlocksMade mempty)
 
-coldKeys :: KeyPair 'BlockIssuer C_Crypto
+coldKeys :: KeyPair 'BlockIssuer Mock
 coldKeys = KeyPair skCold vkCold
   where
-    (vkCold, skCold) = mkKeyPair @C_Crypto (0, 0, 0, 0, 1)
+    (vkCold, skCold) = mkKeyPair @Mock (0, 0, 0, 0, 1)
 
 makeNaiveBlock :: [ValidatedTx A] -> Block A
 makeNaiveBlock txs = Block (BHeader bhb sig) txs'
@@ -102,15 +102,15 @@ makeNaiveBlock txs = Block (BHeader bhb sig) txs'
               vkes
               0
               (KESPeriod 0)
-              (signedDSIGN @C_Crypto (sKey coldKeys) (OCertSignable vkes 0 (KESPeriod 0))),
+              (signedDSIGN @Mock (sKey coldKeys) (OCertSignable vkes 0 (KESPeriod 0))),
           bprotver = ProtVer 5 0
         }
     sig = signedKES () 0 bhb skes
     nonceNonce = mkSeed seedEta (SlotNo 0) NeutralNonce
     leaderNonce = mkSeed seedL (SlotNo 0) NeutralNonce
     txs' = TxSeq . StrictSeq.fromList $ txs
-    (svrf, vvrf) = mkVRFKeyPair @(VRF C_Crypto) (0, 0, 0, 0, 2)
-    (skes, vkes) = mkKESKeyPair @(KES C_Crypto) (0, 0, 0, 0, 3)
+    (svrf, vvrf) = mkVRFKeyPair @(VRF Mock) (0, 0, 0, 0, 2)
+    (skes, vkes) = mkKESKeyPair @(KES Mock) (0, 0, 0, 0, 3)
 
 testBlock :: Block A
 testBlock =
