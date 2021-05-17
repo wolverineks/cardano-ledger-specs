@@ -34,8 +34,31 @@ common project-config
 library
   import:             base, project-config
   hs-source-dirs:     src
-  exposed-modules:    Test.Cardano.Ledger.TestableEra
-  build-depends:      shelley-spec-ledger
+  exposed-modules:
+    Test.Cardano.Ledger.Examples.TwoPhaseValidation
+    Test.Cardano.Ledger.Generic.Proof
+    Test.Cardano.Ledger.Generic.Indexed
+    Test.Cardano.Ledger.Generic.Updaters
+    Test.Cardano.Ledger.TestableEra
+  build-depends:
+    bytestring,
+    cardano-crypto-class,
+    cardano-ledger-alonzo,
+    cardano-ledger-core,
+    cardano-ledger-shelley-ma,
+    cardano-slotting,
+    containers,
+    data-default-class,
+    plutus-tx,
+    shelley-spec-ledger,
+    shelley-spec-ledger-test,
+    small-steps,
+    small-steps-test,
+    strict-containers,
+    tasty,
+    tasty-hunit,
+    time,
+
 
 benchmark bench
   import:             base, project-config
