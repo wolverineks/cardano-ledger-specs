@@ -39,11 +39,13 @@ library
     Test.Cardano.Ledger.Generic.Proof
     Test.Cardano.Ledger.Generic.Indexed
     Test.Cardano.Ledger.Generic.Updaters
+    Test.Cardano.Ledger.Properties
     Test.Cardano.Ledger.TestableEra
   build-depends:
     bytestring,
     cardano-crypto-class,
     cardano-ledger-alonzo,
+    cardano-ledger-alonzo-test,
     cardano-ledger-core,
     cardano-ledger-shelley-ma,
     cardano-slotting,
@@ -51,6 +53,7 @@ library
     data-default-class,
     plutus-ledger-api,
     plutus-tx,
+    QuickCheck,
     shelley-spec-ledger,
     shelley-spec-ledger-test,
     small-steps,
@@ -58,6 +61,7 @@ library
     strict-containers,
     tasty,
     tasty-hunit,
+    tasty-quickcheck,
     time,
 
 
