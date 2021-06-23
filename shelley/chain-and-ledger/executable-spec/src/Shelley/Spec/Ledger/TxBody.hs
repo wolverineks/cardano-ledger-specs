@@ -73,9 +73,13 @@ module Shelley.Spec.Ledger.TxBody
   )
 where
 
+import qualified Data.ByteString as BS
+import Data.Text.Encoding (decodeUtf8)
+import Cardano.Prelude (cborError)
 import Cardano.Binary
   ( Annotator (..),
     Case (..),
+    DecoderError(..),
     FromCBOR (fromCBOR),
     Size,
     ToCBOR (..),
@@ -1138,7 +1142,9 @@ instance FromCBOR PoolMetadata where
     decodeRecordNamed "PoolMetadata" (const 2) $ do
       u <- fromCBOR
       h <- fromCBOR
-      pure $ PoolMetadata u h
+      if BS.length h > 32
+        then cborError $ DecoderErrorCustom "PMDH too big: " (decodeUtf8 h)
+        else pure $ PoolMetadata u h
 
 -- | The size of the '_poolOwners' 'Set'.  Only used to compute size of encoded
 -- 'PoolParams'.
