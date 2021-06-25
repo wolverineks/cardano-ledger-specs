@@ -1142,7 +1142,7 @@ instance FromCBOR PoolMetadata where
     decodeRecordNamed "PoolMetadata" (const 2) $ do
       u <- fromCBOR
       h <- fromCBOR
-      if BS.length h > 32
+      if BS.length h > 2
         then cborError $ DecoderErrorCustom "PMDH too big: " (decodeUtf8 h)
         else pure $ PoolMetadata u h
 
