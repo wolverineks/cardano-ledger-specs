@@ -104,7 +104,7 @@ data DelegsPredicateFailure era
   = DelegateeNotRegisteredDELEG
       !(KeyHash 'StakePool (Crypto era)) -- target pool which is not registered
   | WithdrawalsNotInRewardsDELEGS
-      !(Map (RewardAcnt (Crypto era)) Coin) -- withdrawals that are missing or do not withdrawl the entire amount
+      !(Map (RewardAcnt (Crypto era)) (Maybe (Coin, Coin))) -- withdrawals that are missing or do not withdrawl the entire amount
   | DelplFailure (PredicateFailure (Core.EraRule "DELPL" era)) -- Subtransition Failures
   deriving (Generic)
 
@@ -206,14 +206,17 @@ delegsTransition = do
       let ds = _dstate dpstate
           wdrls_ = unWdrl . getField @"wdrls" $ getField @"body" tx
           rewards = _rewards ds
+          rewards_ = Map.mapKeys (mkRwdAcnt network) rewards
+          bad = Map.differenceWith
+                  (\x y -> if x /= y then Just x else Nothing)
+                  wdrls_
+                  rewards_
+          f ra x = case Map.lookup ra rewards_ of
+                     Nothing -> Nothing
+                     Just y -> Just (x, y)
 
       isSubmapOf wdrls_ rewards -- wdrls_ ⊆ rewards
-        ?! WithdrawalsNotInRewardsDELEGS
-          ( Map.differenceWith
-              (\x y -> if x /= y then Just x else Nothing)
-              wdrls_
-              (Map.mapKeys (mkRwdAcnt network) rewards)
-          )
+        ?! WithdrawalsNotInRewardsDELEGS (Map.mapWithKey f bad)
 
       let wdrls_' :: RewardAccounts (Crypto era)
           wdrls_' =
