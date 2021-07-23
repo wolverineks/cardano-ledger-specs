@@ -310,8 +310,17 @@ alonzoStyleWitness = do
          in seq (rnf ans) ans
   null unredeemed ?! UnRedeemableScripts unredeemed
 
-  {-  || { (sp, h) ∈ \fun{scriptsNeeded} utxo tx | h\mapsto s ∈ txscripts txw, s ∈ ScriptPhTwo } || = || fun{txrdmrs} tx ||  -}
-  let rdptrs = Set.fromList [el | (sp, _) <- sphs, SJust el <- [rdptr @era txbody sp]]
+  {-  ∀ (ptr \mapsto _ ) ∈ txrdmrs tx, ptr ∈ { rdptr txb sp | (sp, h) ∈ scriptsNeeded utxo tx,
+    h \mapsto s ∈ txscripts txw, s ∈ Scriptph2}  -}
+  let rdptrs =
+        Set.fromList
+          [ el
+            | (sp, hs) <- sphs,
+              SJust el <- [rdptr @era txbody sp],
+              (hs', script) <- Map.toList (getField @"scriptWits" tx),
+              hs == hs',
+              (not . isNativeScript @era) script
+          ]
       extraRdmrs :: [RdmrPtr]
       extraRdmrs = Map.keys $ Map.withoutKeys (unRedeemers $ txrdmrs $ wits tx) rdptrs
   null extraRdmrs ?! ExtraRedeemers extraRdmrs

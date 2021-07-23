@@ -1583,6 +1583,12 @@ alonzoUTXOWexamples =
                       ],
                     WrappedShelleyEraFailure . MissingScriptWitnessesUTXOW . Set.singleton $
                       (alwaysSucceedsHash 2 pf),
+                    -- these redeemers are associated with phase-1 scripts
+                    ExtraRedeemers
+                      [ RdmrPtr Tag.Mint 1,
+                        RdmrPtr Tag.Cert 1,
+                        RdmrPtr Tag.Rewrd 0
+                      ],
                     UnRedeemableScripts
                       [ ( Rewarding
                             ( RewardAcnt
