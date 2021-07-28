@@ -5,7 +5,7 @@
 
 module Test.Cardano.Ledger.Alonzo.Serialisation.Tripping where
 
-import Cardano.Binary
+import Cardano.Binary hiding (label)
 import Cardano.Ledger.Alonzo (AlonzoEra)
 import Cardano.Ledger.Alonzo.Data (AuxiliaryData, Data (..))
 import Cardano.Ledger.Alonzo.PParams (PParams, PParamsUpdate)
@@ -16,19 +16,22 @@ import Cardano.Ledger.Alonzo.Scripts (Script)
 import Cardano.Ledger.Alonzo.Tx (CostModel)
 import Cardano.Ledger.Alonzo.TxBody (TxBody)
 import Cardano.Ledger.Alonzo.TxWitness
-import qualified Cardano.Ledger.Tx as LTX
 import qualified Data.ByteString as BS (ByteString)
 import qualified Data.ByteString.Base16.Lazy as Base16
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Plutus.V1.Ledger.Api as Plutus
 import Shelley.Spec.Ledger.BlockChain (Block)
 import Shelley.Spec.Ledger.Metadata (Metadata)
+import qualified Shelley.Spec.Ledger.Tx as LTX
 import Test.Cardano.Ledger.Alonzo.Serialisation.Generators ()
 import Test.Cardano.Ledger.ShelleyMA.Serialisation.Coders (roundTrip, roundTripAnn)
 import Test.Cardano.Ledger.ShelleyMA.Serialisation.Generators ()
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
 import Test.Tasty
 import Test.Tasty.QuickCheck
+import Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Codec.CBOR.Read as CBOR (DeserialiseFailure (..), deserialiseFromBytes)
+import qualified Codec.CBOR.Write as CBOR (toLazyByteString)
 
 trippingF ::
   (Eq src, Show src, Show target, ToCBOR src) =>
@@ -67,6 +70,20 @@ trippingAnn x = trippingF roundTripAnn x
 
 tripping :: (Eq src, Show src, ToCBOR src, FromCBOR src) => src -> Property
 tripping x = trippingF roundTrip x
+
+propRoundTripBlock :: Block (AlonzoEra StandardCrypto) -> Property
+propRoundTripBlock blk =
+      case CBOR.deserialiseFromBytes decoder bs of
+        Right{} -> property True
+        Left (CBOR.DeserialiseFailure _ _) -> property False
+  where
+    bs = CBOR.toLazyByteString encoding
+
+    encoding = toCBOR blk
+
+    decoder = do
+      _ <- fromCBOR @(Annotator (Block (AlonzoEra StandardCrypto)))
+      return ()
 
 -- ==========================
 -- Catch violations of bytestrings that are too long.
@@ -111,5 +128,6 @@ tests =
       testProperty "alonzo/Tx" $
         trippingAnn @(LTX.Tx (AlonzoEra C_Crypto)),
       testProperty "alonzo/Block" $
-        trippingAnn @(Block (AlonzoEra C_Crypto))
+        trippingAnn @(Block (AlonzoEra C_Crypto)),
+      testProperty "GH-2397"propRoundTripBlock
     ]
