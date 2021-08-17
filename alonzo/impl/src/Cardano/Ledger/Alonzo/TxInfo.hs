@@ -47,7 +47,7 @@ import Data.Fixed (HasResolution (resolution))
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
--- Instances only
+import Data.Text (Text, unpack)
 import Data.Text.Prettyprint.Doc (Pretty (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -390,19 +390,19 @@ runPLCScript ::
   ScriptResult
 runPLCScript proxy (CostModel cost) scriptbytestring units ds =
   case P.evaluateScriptRestricting
-    P.Quiet
+    P.Verbose -- TODO THOU SHALT NOT DO THIS
     cost
     (transExUnits units)
     scriptbytestring
     ds of
-    (_, Left e) -> explain_plutus_failure proxy scriptbytestring e ds
+    (plog, Left e) -> explain_plutus_failure proxy scriptbytestring e ds plog
     (_, Right ()) -> Passes
 
 -- | Explin why a script might fail. Scripts come in two flavors. 1) with 3  data arguments [data,redeemer,context]
 --   and  2) with 2 data arguments [redeemer,context]. It pays to decode the context data into a real context
 --   because that provides way more information. But there is no guarantee the context data really can be decoded.
-explain_plutus_failure :: forall era. Show (Script era) => Proxy era -> SBS.ShortByteString -> P.EvaluationError -> [P.Data] -> ScriptResult
-explain_plutus_failure _proxy scriptbytestring e [dat, redeemer, info] =
+explain_plutus_failure :: forall era. Show (Script era) => Proxy era -> SBS.ShortByteString -> P.EvaluationError -> [P.Data] -> [Text] -> ScriptResult
+explain_plutus_failure _proxy scriptbytestring e [dat, redeemer, info] plog =
   -- A three data argument script.
   let ss :: Script era
       ss = PlutusScript scriptbytestring
@@ -412,25 +412,27 @@ explain_plutus_failure _proxy scriptbytestring e [dat, redeemer, info] =
         Nothing -> Fails [line]
           where
             line =
-              unlines
+              unlines $
                 [ "\nThe 3 arg plutus script (" ++ name ++ ") fails.",
                   show e,
                   "The data is: " ++ show dat,
                   "The redeemer is: " ++ show redeemer,
-                  "The third data argument, does not decode to a context\n" ++ show info
-                ]
+                  "The third data argument, does not decode to a context\n" ++ show info,
+                  "The plutus log is:\n"
+                ] ++ (map unpack plog)
         Just info2 -> Fails [line]
           where
             info3 = show (pretty (info2 :: P.ScriptContext))
             line =
-              unlines
+              unlines $
                 [ "\nThe 3 arg plutus script (" ++ name ++ ") fails.",
                   show e,
                   "The data is: " ++ show dat,
                   "The redeemer is: " ++ show redeemer,
-                  "The context is:\n" ++ info3
-                ]
-explain_plutus_failure _proxy scriptbytestring e [redeemer, info] =
+                  "The context is:\n" ++ info3,
+                  "The plutus log is:\n"
+                ] ++ (map unpack plog)
+explain_plutus_failure _proxy scriptbytestring e [redeemer, info] plog =
   -- A two data argument script.
   let ss :: Script era
       ss = PlutusScript scriptbytestring
@@ -440,36 +442,39 @@ explain_plutus_failure _proxy scriptbytestring e [redeemer, info] =
         Nothing -> Fails [line]
           where
             line =
-              unlines
+              unlines $
                 [ "\nThe 2 arg plutus script (" ++ name ++ ") fails.",
                   show e,
                   "The redeemer is: " ++ show redeemer,
-                  "The second data argument, does not decode to a context\n" ++ show info
-                ]
+                  "The second data argument, does not decode to a context\n" ++ show info,
+                  "The plutus log is:\n"
+                ] ++ (map unpack plog)
         Just info2 -> Fails [line]
           where
             info3 = show (pretty (info2 :: P.ScriptContext))
             line =
-              unlines
+              unlines $
                 [ "\nThe 2 arg plutus script (" ++ name ++ ") fails.",
                   show e,
                   "The redeemer is: " ++ show redeemer,
-                  "The context is:\n" ++ info3
-                ]
-explain_plutus_failure _proxy scriptbytestring e ds = Fails [line] -- A script with the wrong number of arguments
+                  "The context is:\n" ++ info3,
+                  "The plutus log is:\n"
+                ] ++ (map unpack plog)
+explain_plutus_failure _proxy scriptbytestring e ds plog = Fails [line] -- A script with the wrong number of arguments
   where
     ss :: Script era
     ss = PlutusScript scriptbytestring
     name :: String
     name = show ss
     line =
-      unlines
-        ( [ "\nThe plutus script (" ++ name ++ ") fails.",
-            show e,
-            "It was passed these " ++ show (Prelude.length ds) ++ " data arguments."
-          ]
-            ++ map show ds
-        )
+      unlines $
+        [ "\nThe plutus script (" ++ name ++ ") fails.",
+          show e,
+          "It was passed these " ++ show (Prelude.length ds) ++ " data arguments."
+        ]
+          ++ map show ds
+          ++ ("The plutus log is:\n" : map unpack plog)
+
 
 validPlutusdata :: P.Data -> Bool
 validPlutusdata (P.Constr _n ds) = all validPlutusdata ds
