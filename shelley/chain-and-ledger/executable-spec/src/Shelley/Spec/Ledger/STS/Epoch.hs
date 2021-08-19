@@ -64,7 +64,7 @@ import Shelley.Spec.Ledger.LedgerState
   )
 import Shelley.Spec.Ledger.Rewards ()
 import Shelley.Spec.Ledger.STS.PoolReap (POOLREAP, PoolreapPredicateFailure, PoolreapState (..))
-import Shelley.Spec.Ledger.STS.Snap (SNAP, SnapPredicateFailure)
+import Shelley.Spec.Ledger.STS.Snap (SNAP, SnapEvent, SnapPredicateFailure)
 import Shelley.Spec.Ledger.STS.Upec (UPEC, UpecPredicateFailure)
 
 data EPOCH era
@@ -210,7 +210,7 @@ instance
   ( UsesTxOut era,
     UsesValue era,
     PredicateFailure (Core.EraRule "SNAP" era) ~ SnapPredicateFailure era,
-    Event (Core.EraRule "SNAP" era) ~ Void
+    Event (Core.EraRule "SNAP" era) ~ SnapEvent era
   ) =>
   Embed (SNAP era) (EPOCH era)
   where

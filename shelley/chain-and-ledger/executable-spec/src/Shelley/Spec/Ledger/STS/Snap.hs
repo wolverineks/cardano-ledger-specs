@@ -4,6 +4,7 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -11,6 +12,7 @@ module Shelley.Spec.Ledger.STS.Snap
   ( SNAP,
     PredicateFailure,
     SnapPredicateFailure,
+    SnapEvent,
   )
 where
 
@@ -24,6 +26,7 @@ import Control.State.Transition
     TRC (..),
     TransitionRule,
     judgmentContext,
+    tellEvent,
   )
 import GHC.Generics (Generic)
 import GHC.Records (HasField)
@@ -43,16 +46,21 @@ data SnapPredicateFailure era -- No predicate failures
 
 instance NoThunks (SnapPredicateFailure era)
 
+data SnapEvent era
+  = StakeDistEvent !(SnapShot (Crypto era))
+
 instance (UsesTxOut era, UsesValue era) => STS (SNAP era) where
   type State (SNAP era) = SnapShots (Crypto era)
   type Signal (SNAP era) = ()
   type Environment (SNAP era) = LedgerState era
   type BaseM (SNAP era) = ShelleyBase
   type PredicateFailure (SNAP era) = SnapPredicateFailure era
+  type Event (SNAP era) = SnapEvent era
   initialRules = [pure emptySnapShots]
   transitionRules = [snapTransition]
 
 snapTransition ::
+  forall era.
   ( UsesValue era,
     HasField "address" (Core.TxOut era) (Addr (Crypto era))
   ) =>
@@ -61,7 +69,11 @@ snapTransition = do
   TRC (lstate, s, _) <- judgmentContext
 
   let LedgerState (UTxOState utxo _ fees _) (DPState dstate pstate) = lstate
+      stake :: SnapShot (Crypto era)
       stake = stakeDistr utxo dstate pstate
+
+  tellEvent $ StakeDistEvent stake
+
   pure $
     s
       { _pstakeMark = stake,
