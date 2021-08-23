@@ -7,6 +7,7 @@ module Shelley.Spec.Ledger.HardForks
     allowMIRTransfer,
     validatePoolRewardAccountNetID,
     allowScriptStakeCredsToEarnRewards,
+    disallowVKeyDuplicatesInWitnesses,
   )
 where
 
@@ -47,3 +48,10 @@ allowScriptStakeCredsToEarnRewards ::
   Natural ->
   Bool
 allowScriptStakeCredsToEarnRewards pvM = pvM > 4
+
+-- | Starting with protocol version 5, we no longer allow the witness set
+-- to contain different signatures for the same verification key.
+disallowVKeyDuplicatesInWitnesses ::
+  Natural ->
+  Bool
+disallowVKeyDuplicatesInWitnesses pvM = pvM > 4

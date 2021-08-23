@@ -204,6 +204,7 @@ import Shelley.Spec.Ledger.EpochBoundary
     Stake (..),
     aggregateUtxoCoinByCredential,
   )
+import qualified Shelley.Spec.Ledger.HardForks as HardForks
 import Shelley.Spec.Ledger.PParams
   ( PParams,
     PParams' (..),
@@ -958,22 +959,29 @@ verifiedWits ::
     HasField "addrWits" tx (Set (WitVKey 'Witness (Crypto era))),
     HasField "bootWits" tx (Set (BootstrapWitness (Crypto era))),
     HasField "body" tx (Core.TxBody era),
+    HasField "_protocolVersion" (Core.PParams era) ProtVer,
     DSignable (Crypto era) (Hash (Crypto era) EraIndependentTxBody)
   ) =>
+  Core.PParams era ->
   tx ->
   Either [VKey 'Witness (Crypto era)] ()
-verifiedWits tx =
+verifiedWits pp tx =
   case failed <> failedBootstrap of
     [] -> Right ()
     nonEmpty -> Left nonEmpty
   where
     txbody = getField @"body" tx
     wvkKey (WitVKey k _) = k
+    majorPV = pvMinor $ getField @"_protocolVersion" pp
+    wits =
+      if HardForks.disallowVKeyDuplicatesInWitnesses majorPV
+        then Set.toList $ getField @"addrWits" tx
+        else map unIgnoreSigOrd $ Set.toList $ Set.map IgnoreSigOrd (getField @"addrWits" tx)
     failed =
       wvkKey
         <$> filter
           (not . verifyWitVKey (extractHash (hashAnnotated @(Crypto era) txbody)))
-          (map unIgnoreSigOrd $ Set.toList $ Set.map IgnoreSigOrd (getField @"addrWits" tx))
+          wits
     failedBootstrap =
       bwKey
         <$> filter
