@@ -29,7 +29,6 @@ module Cardano.Ledger.Keys
     KeyPair (..),
     signedDSIGN,
     verifySignedDSIGN,
-    hashSignature,
 
     -- * Key hashes
     KeyHash (..),
@@ -216,13 +215,6 @@ verifySignedDSIGN ::
   Bool
 verifySignedDSIGN (VKey vk) vd sigDSIGN =
   either (const False) (const True) $ DSIGN.verifySignedDSIGN () vk vd sigDSIGN
-
--- | Hash a given signature
-hashSignature ::
-  (Crypto crypto) =>
-  SignedDSIGN crypto (Hash crypto h) ->
-  Hash crypto (SignedDSIGN crypto (Hash crypto h))
-hashSignature = Hash.hashWith (DSIGN.rawSerialiseSigDSIGN . coerce)
 
 --------------------------------------------------------------------------------
 -- Key Hashes

@@ -167,8 +167,8 @@ genHash = mkDummyHash <$> arbitrary
 mkDummyHash :: forall h a. HashAlgorithm h => Int -> Hash.Hash h a
 mkDummyHash = coerce . hashWithSerialiser @h toCBOR
 
-instance HasAlgorithm c => Arbitrary (SafeHash c i) where
-  arbitrary = unsafeMakeSafeHash <$> arbitrary
+genSafeHash :: HasAlgorithm c => Gen (SafeHash c i)
+genSafeHash = unsafeMakeSafeHash <$> arbitrary
 
 {-------------------------------------------------------------------------------
   Generators
@@ -278,12 +278,12 @@ maxTxWits :: Int
 maxTxWits = 5
 
 instance CC.Crypto crypto => Arbitrary (TxId crypto) where
-  arbitrary = TxId <$> arbitrary
+  arbitrary = TxId <$> genSafeHash
 
 instance CC.Crypto crypto => Arbitrary (TxIn crypto) where
   arbitrary =
     TxIn
-      <$> (TxId <$> arbitrary)
+      <$> (TxId <$> genSafeHash)
       <*> arbitrary
 
 instance
@@ -404,7 +404,7 @@ instance CC.Crypto crypto => Arbitrary (ScriptHash crypto) where
   arbitrary = ScriptHash <$> genHash
 
 instance CC.Crypto crypto => Arbitrary (AuxiliaryDataHash crypto) where
-  arbitrary = AuxiliaryDataHash <$> arbitrary
+  arbitrary = AuxiliaryDataHash <$> genSafeHash
 
 instance HashAlgorithm h => Arbitrary (Hash.Hash h a) where
   arbitrary = genHash
