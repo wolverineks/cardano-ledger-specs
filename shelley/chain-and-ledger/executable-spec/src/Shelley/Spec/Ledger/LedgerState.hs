@@ -944,6 +944,12 @@ witsVKeyNeeded utxo' tx genDelegs =
           )
           genDelegs
 
+newtype IgnoreSigOrd kr crypto = IgnoreSigOrd {unIgnoreSigOrd :: WitVKey kr crypto}
+  deriving (Eq)
+
+instance (Typeable kr, CC.Crypto crypto) => Ord (IgnoreSigOrd kr crypto) where
+  compare (IgnoreSigOrd w1) (IgnoreSigOrd w2) = compare (witKeyHash w1) (witKeyHash w2)
+
 -- | Given a ledger state, determine if the UTxO witnesses in a given
 --  transaction are correct.
 verifiedWits ::
@@ -967,7 +973,7 @@ verifiedWits tx =
       wvkKey
         <$> filter
           (not . verifyWitVKey (extractHash (hashAnnotated @(Crypto era) txbody)))
-          (Set.toList $ getField @"addrWits" tx)
+          (map unIgnoreSigOrd $ Set.toList $ Set.map IgnoreSigOrd (getField @"addrWits" tx))
     failedBootstrap =
       bwKey
         <$> filter
