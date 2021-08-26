@@ -19,24 +19,32 @@ module Shelley.Spec.Ledger.API.Validation
     TickTransitionError (..),
     BlockTransitionError (..),
     chainChecks,
+    annotateBlock,
+    applyBlockOptsAnnotated,
+    AnnotatedBlock (..),
   )
 where
 
-import Cardano.Ledger.BaseTypes (Globals (..), ShelleyBase)
+import Cardano.Ledger.BaseTypes (Globals (..), ShelleyBase, epochInfo)
 import Cardano.Ledger.Core (AnnotatedData, ChainData, SerialisableData)
 import qualified Cardano.Ledger.Core as Core
+import qualified Cardano.Ledger.Crypto as CC
 import Cardano.Ledger.Era (Crypto, Era)
 import Cardano.Ledger.Shelley (ShelleyEra)
-import Cardano.Ledger.Slot (SlotNo)
+import Cardano.Ledger.Slot (SlotNo (..), epochInfoSize)
+import Cardano.Slotting.EpochInfo (epochInfoFirst, epochInfoSlotToUTCTime)
+import Cardano.Slotting.Slot (EpochNo, EpochSize)
 import Control.Arrow (left, right)
 import Control.Monad.Except
+import Control.Monad.Identity (runIdentity)
 import Control.Monad.Trans.Reader (runReader)
 import Control.State.Transition.Extended
+import Data.Time (UTCTime)
 import GHC.Generics (Generic)
 import NoThunks.Class (NoThunks (..))
 import Shelley.Spec.Ledger.API.Protocol (PraosCrypto)
-import Shelley.Spec.Ledger.BlockChain (BHeader, Block)
-import Shelley.Spec.Ledger.LedgerState (NewEpochState)
+import Shelley.Spec.Ledger.BlockChain (BHBody (bheaderSlotNo), BHeader, Block (Block'), bhbody)
+import Shelley.Spec.Ledger.LedgerState (NewEpochState (nesEL))
 import qualified Shelley.Spec.Ledger.LedgerState as LedgerState
 import Shelley.Spec.Ledger.PParams (PParams' (..))
 import qualified Shelley.Spec.Ledger.STS.Bbody as STS
@@ -257,3 +265,44 @@ deriving stock instance
 instance
   (NoThunks (STS.PredicateFailure (Core.EraRule "BBODY" era))) =>
   NoThunks (BlockTransitionError era)
+
+data AnnotatedBlock = AnnotatedBlock
+  { -- abEra :: !Era
+    abEpochNo :: !EpochNo,
+    abSlotNo :: !SlotNo,
+    abEpochSlot :: !SlotNo, -- The slot within the epoch (starts at 0 for first slot of each epoch
+    abTimeStamp :: !UTCTime, -- The slot number converted to UTCTime
+    abEpochSize :: !EpochSize -- Number of slots in current epoch
+    -- , abTxs :: [AnnotatedTx]   -- All fields in the superset of all block types
+  }
+
+annotateBlock ::
+  (CC.Crypto (Crypto era), Applicative f) =>
+  Globals ->
+  NewEpochState era ->
+  Block era ->
+  f AnnotatedBlock
+annotateBlock globals state _blk@(Block' bheader _ _) = do
+  let slotNo = bheaderSlotNo $ bhbody bheader
+      epochNo = nesEL state
+      ann =
+        AnnotatedBlock
+          { abEpochNo = epochNo,
+            abSlotNo = slotNo,
+            abEpochSlot = runIdentity $ (epochInfoFirst $ epochInfo globals) epochNo,
+            abTimeStamp = runIdentity $ epochInfoSlotToUTCTime (epochInfo globals) (systemStart globals) slotNo,
+            abEpochSize = runReader (epochInfoSize (epochInfo globals) epochNo) globals
+          }
+  pure ann
+
+applyBlockOptsAnnotated ::
+  forall ep m era.
+  (EventReturnTypeRep ep, MonadError (BlockTransitionError era) m, ApplyBlock era, CC.Crypto (Crypto era)) =>
+  ApplySTSOpts ep ->
+  Globals ->
+  NewEpochState era ->
+  Block era ->
+  m (EventReturnType ep (Core.EraRule "BBODY" era) (NewEpochState era), AnnotatedBlock)
+applyBlockOptsAnnotated opts globals state blk = do
+  (,) <$> applyBlockOpts opts globals state blk
+    <*> annotateBlock globals state blk
