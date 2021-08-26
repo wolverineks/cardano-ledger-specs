@@ -31,6 +31,7 @@ common project-config
                       -Wredundant-constraints
                       -Wunused-packages
 
+
 library
   import:             base, project-config
   hs-source-dirs:     src
@@ -42,6 +43,18 @@ library
     Test.Cardano.Ledger.Generic.Updaters
     Test.Cardano.Ledger.TestableEra
     Test.Cardano.Ledger.Alonzo.Tools
+    Test.Cardano.Ledger.ModelChain
+    Test.Cardano.Ledger.ModelChain.Properties
+    Test.Cardano.Ledger.ModelChain.FeatureSet
+    Test.Cardano.Ledger.ModelChain.Value
+    Test.Cardano.Ledger.ModelChain.Address
+    Test.Cardano.Ledger.ModelChain.Script
+    Test.Cardano.Ledger.ModelChain.Utils
+    Test.Cardano.Ledger.Elaborators
+    Test.Cardano.Ledger.Elaborators.Alonzo
+    Test.Cardano.Ledger.Elaborators.Shelley
+    Test.Cardano.Ledger.DependGraph
+
   build-depends:
     aeson,
     array,
@@ -52,13 +65,29 @@ library
     cardano-ledger-alonzo-test,
     cardano-ledger-core,
     cardano-ledger-shelley-ma,
+    cardano-ledger-shelley-ma-test,
     cardano-slotting,
     containers,
+    criterion,
     data-default-class,
+    deepseq,
+    fgl,
     genvalidity,
     genvalidity-scientific,
+    groups,
+    hkd,
+    lens,
+    monad-supply,
+    mtl,
+    nonempty-containers,
     plutus-ledger-api,
+    plutus-tx,
+    QuickCheck,
+    QuickCheck-GenT,
+    quiet,
+    random,
     scientific,
+    semigroupoids,
     shelley-spec-ledger,
     shelley-spec-ledger-test,
     small-steps,
@@ -68,7 +97,7 @@ library
     tasty-hunit,
     tasty-quickcheck,
     time,
-    QuickCheck,
+    transformers,
 
 
 test-suite cardano-ledger-test
@@ -76,6 +105,8 @@ test-suite cardano-ledger-test
 
   type:                exitcode-stdio-1.0
   main-is:             Tests.hs
+  ghc-options: -rtsopts -threaded
+
   hs-source-dirs:      test
   other-modules:
   build-depends:
