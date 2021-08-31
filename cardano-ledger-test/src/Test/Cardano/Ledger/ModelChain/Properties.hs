@@ -25,6 +25,7 @@ import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.Value (AssetName (..))
 import Cardano.Ledger.Shelley (ShelleyEra)
+import Control.Arrow ((&&&))
 import Control.DeepSeq
 import Control.Lens
 import qualified Control.Monad.State.Strict as State
@@ -306,16 +307,33 @@ prop_simulateChainModel g e = execPropertyWriter $ do
 tellProperty :: Writer.MonadWriter (Endo Property) m => (Property -> Property) -> m ()
 tellProperty = Writer.tell . Endo
 
+tellProperty_ :: (Writer.MonadWriter (Endo Property) m, Testable prop) => prop -> m ()
+tellProperty_ = Writer.tell . Endo . (.&&.)
+
 execPropertyWriter :: Testable prop => Writer.Writer (Endo Property) () -> prop -> Property
 execPropertyWriter x k = (flip appEndo (property k)) . Writer.execWriter $ x
 
 execPropertyWriter_ :: Writer.Writer (Endo Property) () -> Property
 execPropertyWriter_ x = (flip appEndo (property True)) . Writer.execWriter $ x
 
-checkElaboratorResult :: LedgerState.NewEpochState era -> EraElaboratorState era -> Property
+prop_null :: (Foldable f, Show (f a)) => f a -> Property
+prop_null xs = counterexample (interpret res ++ show xs) res
+  where
+    res = null xs
+    interpret True = "null "
+    interpret False = "not . null $ "
+
+checkElaboratorResult ::
+  ( LedgerState.TransUTxOState Show era,
+    Show (Core.Tx era)
+  ) =>
+  LedgerState.NewEpochState era ->
+  EraElaboratorState era ->
+  Property
 checkElaboratorResult _nes ees = execPropertyWriter_ $ do
   let stats = (_eesStats ees)
   tellProperty $ counterexample $ (<>) "stats:" $ show stats
+  tellProperty_ $ prop_null $ _eeStats_adaConservedErrors stats
   -- tellProperty $ cover 90 (_eeStats_badWdrls stats * 10 <= _eeStats_wdrls stats) "zero withdrawals < 10%"
   tellProperty $ cover 50 (_eeStats_badWdrls stats <= 0) "zero withdrawals"
   pure ()
@@ -389,7 +407,9 @@ modelGenTest ::
   ( ElaborateEraModel era,
     Default (AdditionalGenesisConfig era),
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    LedgerState.TransUTxOState Show era,
+    Show (Core.Tx era)
   ) =>
   proxy era ->
   Property
@@ -398,7 +418,6 @@ modelGenTest proxy =
     ( execPropertyWriter $ do
         tellProperty $ counterexample ("numPools: " <> show (lengthOf (traverse . modelDCerts . _ModelDelegate) b))
         tellProperty $ propModelStats b
-        -- tellProperty $ prop_simulateChainModel a b
     )
       (testChainModelInteractionWith proxy checkElaboratorResult a b)
 
@@ -418,7 +437,7 @@ generateOneExample = do
   (a, b) <- time "generate" $ generate $ genModel' proxy' testGlobals
   time "examine" $ print $ examineModel b
   _mresult <- time "modelApp" $ pure $ simulateChainModel a b
-  result <- time "elaborate" $ pure $ fst $ chainModelInteractionWith proxy a b
+  result <- time "elaborate" $ pure $ fst &&& (_eesStats . snd . snd) $ chainModelInteractionWith proxy a b
   print result
 
 -- | some hand-written model based unit tests
@@ -428,7 +447,9 @@ modelUnitTests ::
     Default (AdditionalGenesisConfig era),
     Eq (PredicateFailure (Core.EraRule "LEDGER" era)),
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    LedgerState.TransUTxOState Show era,
+    Show (Core.Tx era)
   ) =>
   proxy era ->
   TestTree

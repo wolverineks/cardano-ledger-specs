@@ -82,6 +82,7 @@ import Shelley.Spec.Ledger.EpochBoundary (BlocksMade (..))
 import Shelley.Spec.Ledger.Genesis
 import Shelley.Spec.Ledger.LedgerState (NewEpochState)
 import qualified Shelley.Spec.Ledger.LedgerState as LedgerState
+import Shelley.Spec.Ledger.STS.Chain (totalAdaES)
 import Shelley.Spec.Ledger.STS.EraMapping ()
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import Shelley.Spec.Ledger.TxBody
@@ -130,17 +131,49 @@ instance Show (ElaboratedScriptsCache era) where
       Show.showString "ElaboratedScriptsCache "
         . showsPrec 11 (Map.keysSet xs)
 
-data EraElaboratorStats = EraElaboratorStats
-  { _eeStats_wdrls :: Int,
-    _eeStats_badWdrls :: Int
+data EraElaboratorStats era = EraElaboratorStats
+  { -- | total wdrls in model
+    _eeStats_wdrls :: Int,
+    -- | number of wdrls when no rewards are available
+    _eeStats_badWdrls :: Int,
+    -- | the arguments to applyTx
+    _eeStats_adaConservedErrors ::
+      [ ( Globals,
+          MempoolEnv era,
+          (LedgerState.UTxOState era, LedgerState.DPState (Crypto era)),
+          Core.Tx era
+        )
+      ]
   }
-  deriving (Eq, Ord, Show)
+  deriving (Generic)
 
-instance Semigroup EraElaboratorStats where
-  EraElaboratorStats x y <> EraElaboratorStats x' y' = EraElaboratorStats (x + x') (y + y')
+instance Eq (EraElaboratorStats era) where
+  x == y = compare x y == EQ
 
-instance Monoid EraElaboratorStats where
-  mempty = EraElaboratorStats 0 0
+instance Ord (EraElaboratorStats era) where
+  compare =
+    on compare _eeStats_wdrls
+      <> on compare _eeStats_badWdrls
+      <> on compare (length . _eeStats_adaConservedErrors)
+
+deriving instance
+  ( LedgerState.TransUTxOState Show era,
+    Show (Core.Tx era)
+  ) =>
+  Show (EraElaboratorStats era)
+
+instance NFData (EraElaboratorStats era) where
+  rnf = rwhnf
+
+instance Semigroup (EraElaboratorStats era) where
+  EraElaboratorStats wdrls badWdrls adaConservedErrors <> EraElaboratorStats wdrls' badWdrls' adaConservedErrors' =
+    EraElaboratorStats
+      (wdrls + wdrls')
+      (badWdrls + badWdrls')
+      (adaConservedErrors <> adaConservedErrors')
+
+instance Monoid (EraElaboratorStats era) where
+  mempty = EraElaboratorStats 0 0 []
 
 data EraElaboratorState era = EraElaboratorState
   { _eesUnusedKeyPairs :: Word64,
@@ -150,11 +183,15 @@ data EraElaboratorState era = EraElaboratorState
     _eesUTxOs :: Map.Map ModelUTxOId (TestUTxOInfo era),
     _eesCurrentSlot :: SlotNo,
     _eesStakeCredentials :: Map.Map (StakeCredential (Crypto era)) (ModelAddress (EraScriptFeature era)),
-    _eesStats :: EraElaboratorStats
+    _eesStats :: EraElaboratorStats era
   }
 
 deriving instance
-  (C.Crypto (Crypto era), Show (Core.Script era)) =>
+  ( C.Crypto (Crypto era),
+    Show (Core.Script era),
+    LedgerState.TransUTxOState Show era,
+    Show (Core.Tx era)
+  ) =>
   Show (EraElaboratorState era)
 
 data TestUTxOInfo era = TestUTxOInfo
@@ -241,7 +278,7 @@ eesUTxOs a2fb s = (\b -> s {_eesUTxOs = b}) <$> a2fb (_eesUTxOs s)
 eesCurrentSlot :: Lens' (EraElaboratorState era) SlotNo
 eesCurrentSlot a2fb s = (\b -> s {_eesCurrentSlot = b}) <$> a2fb (_eesCurrentSlot s)
 
-eesStats :: Lens' (EraElaboratorState era) EraElaboratorStats
+eesStats :: Lens' (EraElaboratorState era) (EraElaboratorStats era)
 eesStats a2fb s = (\b -> s {_eesStats = b}) <$> a2fb (_eesStats s)
 
 data TestAddrInfo era = TestAddrInfo
@@ -778,7 +815,8 @@ class
     )
   default elaborateBlock ::
     ( ApplyBlock era,
-      ApplyTx era
+      ApplyTx era,
+      UsesValue era
     ) =>
     Globals ->
     ModelBlock (EraFeatureSet era) ->
@@ -810,6 +848,12 @@ class
           (mps', _) <- liftApplyTxError $ applyTx globals mempoolEnv (view mempoolState nes0) tx
 
           let nes1 = set mempoolState mps' nes0
+              adaSupply = totalAdaES (LedgerState.nesEs nes1)
+          unless (adaSupply == Coin (toInteger $ maxLovelaceSupply globals)) $
+            _2 . eesStats
+              <>= mempty
+                { _eeStats_adaConservedErrors = [(globals, mempoolEnv, (view mempoolState nes0), tx)]
+                }
           put (nes1, ems)
 
         pure ()
