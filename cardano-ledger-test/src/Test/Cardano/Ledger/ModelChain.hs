@@ -30,6 +30,7 @@ module Test.Cardano.Ledger.ModelChain where
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Crypto as C
+import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID (..))
 import qualified Cardano.Ledger.Mary.Value
 import qualified Cardano.Ledger.Val as Val
@@ -100,7 +101,7 @@ filterModelValueVars ::
   (KnownRequiredFeatures c, KnownValueFeature d) =>
   ModelValueVars a b ->
   Maybe (ModelValueVars c d)
-filterModelValueVars (ModelValue_Reward x) = ModelValue_Reward <$> filterModelAddress (reifyRequiredFeatures (Proxy @c)) x
+filterModelValueVars (ModelValue_Reward x) = ModelValue_Reward <$> filterModelCredential (reifyRequiredFeatures (Proxy @c)) x
 filterModelValueVars (ModelValue_MA ys) = do
   Refl <- reifyExpectAnyOutput (reifyValueFeature (Proxy @d))
   Refl <- reifyExpectAnyOutput (reifyValueFeature (Proxy @(ValueFeature c)))
@@ -137,7 +138,7 @@ instance RequiredFeatures ModelTx where
       <$> (traverse . traverse) (filterFeatures tag) outs
       <*> (filterFeatures tag fee)
       <*> traverse (filterFeatures tag) dcert
-      <*> fmap Map.fromList (for (Map.toList wdrl) $ \(k, v) -> (,) <$> filterModelAddress tag k <*> filterFeatures tag v) -- traverse (filterFeatures tag) f
+      <*> fmap Map.fromList (for (Map.toList wdrl) $ \(k, v) -> (,) <$> filterModelCredential tag k <*> filterFeatures tag v)
       <*> case g of
         NoMintSupport () -> case tag of
           FeatureTag ValueFeatureTag_AdaOnly _ -> pure $ NoMintSupport ()
@@ -156,12 +157,21 @@ filterModelAddress ::
   FeatureTag b ->
   ModelAddress a ->
   Maybe (ModelAddress (ScriptFeature b))
-filterModelAddress (FeatureTag _ s) = \case
-  ModelAddress a -> Just (ModelAddress a)
-  ModelScriptAddress a -> case s of
+filterModelAddress tag (ModelAddress pmt stk) =
+  ModelAddress
+    <$> filterModelCredential tag pmt
+    <*> filterModelCredential tag stk
+
+filterModelCredential ::
+  FeatureTag b ->
+  ModelCredential r a ->
+  Maybe (ModelCredential r (ScriptFeature b))
+filterModelCredential (FeatureTag _ s) = \case
+  ModelKeyHashObj a -> Just (ModelKeyHashObj a)
+  ModelScriptHashObj a -> case s of
     ScriptFeatureTag_None -> Nothing
     ScriptFeatureTag_Simple -> Nothing
-    ScriptFeatureTag_PlutusV1 -> Just (ModelScriptAddress a)
+    ScriptFeatureTag_PlutusV1 -> Just (ModelScriptHashObj a)
 
 instance RequiredFeatures ModelBlock where
   filterFeatures tag (ModelBlock slotNo txns) =
@@ -177,7 +187,7 @@ instance RequiredFeatures ModelEpoch where
 type ModelMA era = (ModelScript era, AssetName)
 
 data ModelValueVars era (k :: TyValueExpected) where
-  ModelValue_Reward :: ModelAddress (ScriptFeature era) -> ModelValueVars era k
+  ModelValue_Reward :: ModelCredential 'Staking (ScriptFeature era) -> ModelValueVars era k
   ModelValue_MA ::
     ('ExpectAnyOutput ~ ValueFeature era) =>
     ModelMA (ScriptFeature era) ->
@@ -240,7 +250,7 @@ data ModelTx (era :: FeatureSet) = ModelTx
     _mtxOutputs :: ![(ModelUTxOId, ModelTxOut era)],
     _mtxFee :: !(ModelValue 'ExpectAdaOnly era),
     _mtxDCert :: ![ModelDCert era],
-    _mtxWdrl :: !(Map.Map (ModelAddress (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era)),
+    _mtxWdrl :: !(Map.Map (ModelCredential 'Staking (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era)),
     _mtxMint :: !(IfSupportsMint () (ModelValue (ValueFeature era) era) (ValueFeature era)),
     _mtxCollateral :: !(IfSupportsPlutus () (Set ModelUTxOId) (ScriptFeature era))
   }
@@ -291,7 +301,7 @@ modelTx_dCert :: Lens' (ModelTx era) [ModelDCert era]
 modelTx_dCert = lens _mtxDCert (\s b -> s {_mtxDCert = b})
 {-# INLINE modelTx_dCert #-}
 
-modelTx_wdrl :: Lens' (ModelTx era) (Map.Map (ModelAddress (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era))
+modelTx_wdrl :: Lens' (ModelTx era) (Map.Map (ModelCredential 'Staking (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era))
 modelTx_wdrl = lens _mtxWdrl (\s b -> s {_mtxWdrl = b})
 {-# INLINE modelTx_wdrl #-}
 
@@ -380,7 +390,7 @@ modelEpoch_blocksMade = lens _modelEpoch_blocksMade (\s b -> s {_modelEpoch_bloc
 {-# INLINE modelEpoch_blocksMade #-}
 
 data ModelDelegation era = ModelDelegation
-  { _mdDelegator :: !(ModelAddress (ScriptFeature era)),
+  { _mdDelegator :: !(ModelCredential 'Staking (ScriptFeature era)),
     _mdDelegatee :: !ModelPoolId
   }
   deriving (Generic, Eq, Ord)
@@ -391,7 +401,7 @@ instance NFData (ModelDelegation era)
 instance RequiredFeatures ModelDelegation where
   filterFeatures tag (ModelDelegation a b) =
     ModelDelegation
-      <$> filterModelAddress tag a
+      <$> filterModelCredential tag a
       <*> pure b
 
 data ModelPoolParams era = ModelPoolParams
@@ -399,8 +409,8 @@ data ModelPoolParams era = ModelPoolParams
     _mppPledge :: !Coin,
     _mppCost :: !Coin,
     _mppMargin :: !UnitInterval,
-    _mppRAcnt :: !(ModelAddress (ScriptFeature era)),
-    _mppOwners :: ![ModelAddress (ScriptFeature era)]
+    _mppRAcnt :: !(ModelCredential 'Staking (ScriptFeature era)),
+    _mppOwners :: ![ModelCredential 'Staking ('TyScriptFeature 'False 'False)]
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -409,13 +419,13 @@ instance NFData (ModelPoolParams era)
 instance RequiredFeatures ModelPoolParams where
   filterFeatures tag (ModelPoolParams poolId pledge cost margin rAcnt owners) =
     ModelPoolParams poolId pledge cost margin
-      <$> filterModelAddress tag rAcnt
-      <*> traverse (filterModelAddress tag) owners
+      <$> filterModelCredential tag rAcnt
+      <*> pure owners
 
 -- ignores genesis delegation details.
 data ModelDCert era
-  = ModelRegisterStake (ModelAddress (ScriptFeature era))
-  | ModelDeRegisterStake (ModelAddress (ScriptFeature era))
+  = ModelRegisterStake (ModelCredential 'Staking (ScriptFeature era))
+  | ModelDeRegisterStake (ModelCredential 'Staking (ScriptFeature era))
   | ModelDelegate (ModelDelegation era)
   | ModelRegisterPool (ModelPoolParams era)
   | ModelRetirePool ModelPoolId EpochNo
@@ -423,13 +433,13 @@ data ModelDCert era
 
 instance NFData (ModelDCert era)
 
-_ModelRegisterStake :: Prism' (ModelDCert era) (ModelAddress (ScriptFeature era))
+_ModelRegisterStake :: Prism' (ModelDCert era) (ModelCredential 'Staking (ScriptFeature era))
 _ModelRegisterStake = prism ModelRegisterStake $ \case
   ModelRegisterStake x -> Right x
   x -> Left x
 {-# INLINE _ModelRegisterStake #-}
 
-_ModelDeRegisterStake :: Prism' (ModelDCert era) (ModelAddress (ScriptFeature era))
+_ModelDeRegisterStake :: Prism' (ModelDCert era) (ModelCredential 'Staking (ScriptFeature era))
 _ModelDeRegisterStake = prism ModelDeRegisterStake $ \case
   ModelDeRegisterStake x -> Right x
   x -> Left x
@@ -462,8 +472,8 @@ instance HasModelDCert era (ModelDCert era) where
 
 instance RequiredFeatures ModelDCert where
   filterFeatures tag = \case
-    ModelRegisterStake a -> ModelRegisterStake <$> filterModelAddress tag a
-    ModelDeRegisterStake a -> ModelDeRegisterStake <$> filterModelAddress tag a
+    ModelRegisterStake a -> ModelRegisterStake <$> filterModelCredential tag a
+    ModelDeRegisterStake a -> ModelDeRegisterStake <$> filterModelCredential tag a
     ModelDelegate a -> ModelDelegate <$> filterFeatures tag a
     ModelRegisterPool a -> ModelRegisterPool <$> filterFeatures tag a
     ModelRetirePool a b -> pure $ ModelRetirePool a b
@@ -483,8 +493,8 @@ type ModelLedgerInputs era =
   )
 
 data ModelSnapshot era = ModelSnapshot
-  { _modelSnapshot_stake :: Map.Map (ModelAddress (ScriptFeature era)) Coin,
-    _modelSnapshot_delegations :: Map.Map (ModelAddress (ScriptFeature era)) ModelPoolId,
+  { _modelSnapshot_stake :: Map.Map (ModelCredential 'Staking (ScriptFeature era)) Coin,
+    _modelSnapshot_delegations :: Map.Map (ModelCredential 'Staking (ScriptFeature era)) ModelPoolId,
     _modelSnapshot_pools :: Map.Map ModelPoolId (ModelPoolParams era)
   }
   deriving (Eq, Generic)
@@ -495,11 +505,11 @@ instance NFData (ModelSnapshot era)
 emptyModelSnapshot :: ModelSnapshot era
 emptyModelSnapshot = ModelSnapshot Map.empty Map.empty Map.empty
 
-modelSnapshot_stake :: Lens' (ModelSnapshot era) (Map.Map (ModelAddress (ScriptFeature era)) Coin)
+modelSnapshot_stake :: Lens' (ModelSnapshot era) (Map.Map (ModelCredential 'Staking (ScriptFeature era)) Coin)
 modelSnapshot_stake a2fb s = (\b -> s {_modelSnapshot_stake = b}) <$> a2fb (_modelSnapshot_stake s)
 {-# INLINE modelSnapshot_stake #-}
 
-modelSnapshot_delegations :: Lens' (ModelSnapshot era) (Map.Map (ModelAddress (ScriptFeature era)) ModelPoolId)
+modelSnapshot_delegations :: Lens' (ModelSnapshot era) (Map.Map (ModelCredential 'Staking (ScriptFeature era)) ModelPoolId)
 modelSnapshot_delegations a2fb s = (\b -> s {_modelSnapshot_delegations = b}) <$> a2fb (_modelSnapshot_delegations s)
 {-# INLINE modelSnapshot_delegations #-}
 
@@ -509,7 +519,7 @@ modelSnapshot_pools a2fb s = (\b -> s {_modelSnapshot_pools = b}) <$> a2fb (_mod
 
 data ModelUtxoMap era = ModelUtxoMap
   { _modelUtxoMap_utxos :: (Map.Map ModelUTxOId (Coin, ModelTxOut era)),
-    _modelUtxoMap_balances :: GrpMap (ModelAddress (ScriptFeature era)) Coin
+    _modelUtxoMap_stake :: GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin
   }
   deriving (Eq, Show, Generic)
 
@@ -521,13 +531,13 @@ mkModelUtxoMap ::
 mkModelUtxoMap = (.) (uncurry ModelUtxoMap) $
   foldMap $ \(ui, ma, val) ->
     ( Map.singleton ui (val, ModelTxOut ma (modelValueInject val) dh),
-      grpMapSingleton ma val
+      grpMapSingleton (_modelAddres_stk ma) val
     )
   where
     dh = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () Nothing
 
-getBal :: Map.Map ModelUTxOId (Coin, ModelTxOut era) -> GrpMap (ModelAddress (ScriptFeature era)) Coin
-getBal = foldMap (\(val, txo) -> grpMapSingleton (_mtxo_address txo) val)
+getStake :: Map.Map ModelUTxOId (Coin, ModelTxOut era) -> GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin
+getStake = foldMap (\(val, txo) -> grpMapSingleton (_modelAddres_stk $ _mtxo_address txo) val)
 
 getModelValueCoin :: ModelValue a c -> Coin
 getModelValueCoin = foldMap Val.coin . evalModelValueSimple . unModelValue
@@ -542,7 +552,7 @@ spendModelUTxOs ins outs xs =
       outs' = Map.fromList $ (fmap . fmap) (getModelValueCoin . _mtxo_value &&& id) outs
    in ModelUtxoMap
         { _modelUtxoMap_utxos = Map.withoutKeys (_modelUtxoMap_utxos xs `Map.union` outs') ins,
-          _modelUtxoMap_balances = _modelUtxoMap_balances xs <> getBal outs' ~~ getBal ins'
+          _modelUtxoMap_stake = _modelUtxoMap_stake xs <> getStake outs' ~~ getStake ins'
         }
 
 instance NFData (ModelUtxoMap era)
@@ -562,10 +572,10 @@ instance At (ModelUtxoMap era) where
           let val = foldMap (getModelValueCoin . _mtxo_value) b
            in ModelUtxoMap
                 { _modelUtxoMap_utxos = set (at k) (fmap ((,) val) b) (_modelUtxoMap_utxos s),
-                  _modelUtxoMap_balances =
-                    _modelUtxoMap_balances s
-                      <> foldMap (\(val', ui) -> grpMapSingleton (_mtxo_address ui) (invert val')) a
-                      <> foldMap (\ui -> grpMapSingleton (_mtxo_address ui) val) b
+                  _modelUtxoMap_stake =
+                    _modelUtxoMap_stake s
+                      <> foldMap (\(val', ui) -> grpMapSingleton (_modelAddres_stk $ _mtxo_address ui) (invert val')) a
+                      <> foldMap (\ui -> grpMapSingleton (_modelAddres_stk $ _mtxo_address ui) val) b
                 }
      in b2t <$> (a2fb $ fmap snd a)
 
@@ -573,8 +583,8 @@ data ModelLedger era = ModelLedger
   { _modelLedger_utxos :: (ModelUtxoMap era),
     _modelLedger_stake :: (SnapshotQueue (ModelSnapshot era)),
     _modelLedger_epoch :: EpochNo,
-    _modelLedger_rewards :: (Set (ModelAddress (ScriptFeature era))),
-    _modelLedger_rewardUpdates :: (Set (ModelAddress (ScriptFeature era)))
+    _modelLedger_rewards :: (Set (ModelCredential 'Staking (ScriptFeature era))),
+    _modelLedger_rewardUpdates :: (Set (ModelCredential 'Staking (ScriptFeature era)))
   }
   deriving (Eq, Show, Generic)
 
@@ -612,11 +622,11 @@ modelLedger_epoch :: Lens' (ModelLedger era) EpochNo
 modelLedger_epoch a2fb s = (\b -> s {_modelLedger_epoch = b}) <$> a2fb (_modelLedger_epoch s)
 {-# INLINE modelLedger_epoch #-}
 
-modelLedger_rewards :: Lens' (ModelLedger era) (Set (ModelAddress (ScriptFeature era)))
+modelLedger_rewards :: Lens' (ModelLedger era) (Set (ModelCredential 'Staking (ScriptFeature era)))
 modelLedger_rewards a2fb s = (\b -> s {_modelLedger_rewards = b}) <$> a2fb (_modelLedger_rewards s)
 {-# INLINE modelLedger_rewards #-}
 
-modelLedger_rewardUpdates :: Lens' (ModelLedger era) (Set (ModelAddress (ScriptFeature era)))
+modelLedger_rewardUpdates :: Lens' (ModelLedger era) (Set (ModelCredential 'Staking (ScriptFeature era)))
 modelLedger_rewardUpdates a2fb s = (\b -> s {_modelLedger_rewardUpdates = b}) <$> a2fb (_modelLedger_rewardUpdates s)
 {-# INLINE modelLedger_rewardUpdates #-}
 
@@ -653,8 +663,8 @@ applyModelBlocksMade (ModelBlocksMade blocksMade) = State.execState $ do
   -- to compute it's correct value at the time of snapshot.
   -- TODO: keep the stake qty up to date.
   stakeMark ::
-    GrpMap (ModelAddress (ScriptFeature era)) Coin <-
-    uses modelLedger_utxos $ _modelUtxoMap_balances
+    GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin <-
+    uses modelLedger_utxos $ _modelUtxoMap_stake
   modelLedger_stake . snapshotQueue_mark . modelSnapshot_stake
     %= Map.merge
       Map.dropMissing
@@ -665,12 +675,12 @@ applyModelBlocksMade (ModelBlocksMade blocksMade) = State.execState $ do
   -- take a snapshot
   ModelSnapshot stakes' delegs' pools <- modelLedger_stake %%= shiftSnapshotQueue
 
-  let stakes :: GrpMap (ModelAddress (ScriptFeature era)) Coin
+  let stakes :: GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin
       stakes = mkGrpMap stakes'
-      delegs :: GrpMap ModelPoolId (Coin, Set (ModelAddress (ScriptFeature era)))
+      delegs :: GrpMap ModelPoolId (Coin, Set (ModelCredential 'Staking (ScriptFeature era)))
       delegs = ifoldMap (\addr poolId -> GrpMap . Map.singleton poolId $ (view (grpMap addr) stakes, Set.singleton addr)) delegs'
 
-      rewards :: Set (ModelAddress (ScriptFeature era))
+      rewards :: Set (ModelCredential 'Staking (ScriptFeature era))
       rewards = flip ifoldMap (Map.intersectionWith (,) blocksMade pools) $ \poolId (blockWeight, pool) -> fold $ do
         guard (blockWeight >= 0) -- only if the pool makes *some* number of blocks
         let (dstake, deleg) = view (grpMap poolId) delegs

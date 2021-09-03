@@ -27,6 +27,7 @@ module Test.Cardano.Ledger.DependGraph where
 
 import Cardano.Ledger.BaseTypes (Globals, boundRational, epochInfo)
 import Cardano.Ledger.Coin
+import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Val as Val
 import Cardano.Slotting.EpochInfo.API (epochInfoSize)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
@@ -61,8 +62,8 @@ import qualified PlutusTx
 import QuickCheck.GenT
 import qualified System.Random
 import Test.Cardano.Ledger.ModelChain
-import Test.Cardano.Ledger.ModelChain.Address
 import Test.Cardano.Ledger.ModelChain.FeatureSet
+import Test.Cardano.Ledger.ModelChain.Script
 import Test.Cardano.Ledger.ModelChain.Value
 
 data GenActionContextF f = GenActionContext
@@ -159,11 +160,11 @@ unfoldModelValue (Coin minValue) = go
             (1, fold1 <$> traverse go m')
           ]
 
-genScriptData :: forall sf. KnownScriptFeature sf => ModelAddress sf -> Gen (IfSupportsPlutus () (Maybe PlutusTx.Data) sf)
+genScriptData :: forall sf r. KnownScriptFeature sf => ModelCredential r sf -> Gen (IfSupportsPlutus () (Maybe PlutusTx.Data) sf)
 genScriptData addr = traverseSupportsPlutus id $
   ifSupportsPlutus (Proxy :: Proxy sf) () $ case addr of
-    ModelAddress _ -> pure Nothing
-    ModelScriptAddress _ -> Just . PlutusTx.I <$> arbitrary
+    ModelKeyHashObj _ -> pure Nothing
+    ModelScriptHashObj _ -> Just . PlutusTx.I <$> arbitrary
 
 genOutputs ::
   GenModelM st era m =>
@@ -197,15 +198,15 @@ genOutputs ins mint = do
       frequency
         [ (1, elements $ fmap _mtxo_address $ toList ins),
           (1, freshPaymentAddress "genOutputs"),
-          (bool 1 0 (null delegates), elements delegates)
+          (bool 1 0 (null delegates), freshWdrlAddress =<< elements delegates)
         ]
-    dh <- liftGen $ genScriptData addr
+    dh <- liftGen $ genScriptData $ _modelAddres_pmt addr
     pure (ui, ModelTxOut addr (ModelValue $ mkModelValue outVal) dh)
   pure (outs, ModelValue $ ModelValue_Inject $ Coin $ fee)
 
 genDCert :: forall st era m. GenModelM st era m => m (ModelDCert era)
 genDCert = do
-  stakeHolders <- uses (modelLedger . modelLedger_utxos) $ Map.keysSet . unGrpMap . _modelUtxoMap_balances
+  stakeHolders <- uses (modelLedger . modelLedger_utxos) $ Map.keysSet . unGrpMap . _modelUtxoMap_stake
   registeredStake <- uses (modelLedger . modelLedger_stake . snapshotQueue_mark . modelSnapshot_stake) $ Map.keysSet
   pools <- uses (modelLedger . modelLedger_stake . snapshotQueue_mark . modelSnapshot_pools) $ Map.keys
 
@@ -221,7 +222,7 @@ genDCert = do
              not (null pools)
          ]
 
-genWdrl :: GenModelM st era m => m (Set (ModelAddress (ScriptFeature era)))
+genWdrl :: GenModelM st era m => m (Set (ModelCredential 'Staking (ScriptFeature era)))
 genWdrl = do
   allRewards <- use (modelLedger . modelLedger_rewards)
   rewards <- sublistOf $ Set.toList allRewards
@@ -515,13 +516,26 @@ freshUtxoId :: (Integral n, MonadSupply n m) => m ModelUTxOId
 freshUtxoId = ModelUTxOId . toInteger <$> supply
 
 freshPaymentAddress :: (Show n, MonadSupply n m) => String -> m (ModelAddress era)
-freshPaymentAddress clue = ModelAddress . (("pay:" <> clue <> "_") <>) . show <$> supply
+freshPaymentAddress clue =
+  ModelAddress
+    <$> freshCredential ("pmt:" <> clue)
+    <*> freshCredential ("stk:" <> clue)
 
-freshRewardAddress :: (Show n, MonadSupply n m) => m (ModelAddress era)
-freshRewardAddress = ModelAddress . ("reward_" <>) . show <$> supply
+freshCredential :: (Show n, MonadSupply n m) => String -> m (ModelCredential r era)
+freshCredential clue = ModelKeyHashObj . (clue <>) . show <$> supply
+
+freshRewardAddress :: (Show n, MonadSupply n m) => m (ModelCredential 'Staking era)
+freshRewardAddress = ModelKeyHashObj . ("reward_" <>) . show <$> supply
 
 freshPoolAddress :: (Show n, MonadSupply n m) => m ModelPoolId
 freshPoolAddress = ModelPoolId . ("pool_" <>) . show <$> supply
+
+freshWdrlAddress :: (Show n, MonadSupply n m) => ModelCredential 'Staking era -> m (ModelAddress era)
+freshWdrlAddress c = do
+  c' <- case c of
+    ModelKeyHashObj x -> freshCredential ("wdrl-" <> x)
+    ModelScriptHashObj x -> freshCredential "wdrl"
+  pure $ ModelAddress c' c
 
 -- TODO: handle this more elegantly
 modelTxOut ::

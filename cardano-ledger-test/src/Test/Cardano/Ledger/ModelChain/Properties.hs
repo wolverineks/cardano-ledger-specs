@@ -20,9 +20,11 @@
 module Test.Cardano.Ledger.ModelChain.Properties where
 
 import Cardano.Ledger.Alonzo (AlonzoEra)
+import Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import Cardano.Ledger.BaseTypes (Globals (..), boundRational)
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Mary.Value (AssetName (..))
 import Cardano.Ledger.Shelley (ShelleyEra)
 import Control.Arrow ((&&&))
@@ -77,23 +79,35 @@ modelMACoin script assets = foldMap f assets
 modelCoin :: Integer -> ModelValue era k
 modelCoin = ModelValue . ModelValue_Inject . Coin
 
-modelReward :: ModelAddress (ScriptFeature era) -> ModelValue k era
+modelReward :: ModelCredential 'Staking (ScriptFeature era) -> ModelValue k era
 modelReward = ModelValue . ModelValue_Var . ModelValue_Reward
 
-modelRewards :: [ModelAddress (ScriptFeature era)] -> Map.Map (ModelAddress (ScriptFeature era)) (ModelValue k era)
+modelRewards :: [ModelCredential 'Staking (ScriptFeature era)] -> Map.Map (ModelCredential 'Staking (ScriptFeature era)) (ModelValue k era)
 modelRewards = foldMap $ \maddr -> Map.singleton maddr $ modelReward maddr
 
-infixl 6 $+
+scriptArity :: Tag -> Natural
+scriptArity Spend = 3
+scriptArity Mint = 2
+scriptArity Cert = 2
+scriptArity Rewrd = 2
 
-infixl 6 $-
+alwaysSucceedsPlutusAddress :: ModelAddress ('TyScriptFeature x 'True)
+alwaysSucceedsPlutusAddress =
+  ModelAddress
+    (ModelScriptHashObj $ ModelPlutusScript_AlwaysSucceeds $ scriptArity Spend)
+    (ModelScriptHashObj $ ModelPlutusScript_AlwaysSucceeds $ scriptArity Cert)
 
 infixl 7 $*
 
 ($*) :: Natural -> ModelValue era k -> ModelValue era k
 x $* ModelValue y = ModelValue (ModelValue_Scale x y)
 
+infixl 6 $+
+
 ($+) :: ModelValue era k -> ModelValue era k -> ModelValue era k
 ModelValue x $+ ModelValue y = ModelValue (ModelValue_Add x y)
+
+infixl 6 $-
 
 ($-) :: ModelValue era k -> ModelValue era k -> ModelValue era k
 ModelValue x $- ModelValue y = ModelValue (ModelValue_Sub x y)
@@ -121,7 +135,7 @@ modelTestDelegations ::
   Bool ->
   ModelAddress AllScriptFeatures ->
   [TestTree]
-modelTestDelegations proxy needsCollateral stakeAddr =
+modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) =
   let modelPool = ModelPoolParams "pool1" (Coin 0) (Coin 0) (fromJust $ boundRational $ 0 % 1) "rewardAcct" ["poolOwner"]
       allAtOnce =
         [ ModelBlock
@@ -135,9 +149,9 @@ modelTestDelegations proxy needsCollateral stakeAddr =
                     ],
                   _mtxFee = modelCoin 100_000_000_000,
                   _mtxDCert =
-                    [ ModelRegisterStake stakeAddr,
+                    [ ModelRegisterStake stakeCred,
                       ModelRegisterPool modelPool,
-                      ModelDelegate (ModelDelegation stakeAddr "pool1")
+                      ModelDelegate (ModelDelegation stakeCred "pool1")
                     ]
                 }
             ]
@@ -162,7 +176,7 @@ modelTestDelegations proxy needsCollateral stakeAddr =
                     [ (2, modelTxOut "unstaked" (modelCoin 9_850_000_000_000))
                     ],
                   _mtxFee = modelCoin 25_000_000_000,
-                  _mtxDCert = [ModelRegisterStake stakeAddr]
+                  _mtxDCert = [ModelRegisterStake stakeCred]
                 }
             ],
           ModelBlock
@@ -186,7 +200,7 @@ modelTestDelegations proxy needsCollateral stakeAddr =
                     ],
                   _mtxFee = modelCoin 25_000_000_000,
                   _mtxDCert =
-                    [ ModelDelegate (ModelDelegation stakeAddr "pool1")
+                    [ ModelDelegate (ModelDelegation stakeCred "pool1")
                     ]
                 }
             ]
@@ -209,7 +223,7 @@ modelTestDelegations proxy needsCollateral stakeAddr =
                     ],
                   _mtxFee = modelCoin 25_000_000_000,
                   _mtxDCert =
-                    [ ModelDelegate (ModelDelegation stakeAddr "pool1")
+                    [ ModelDelegate (ModelDelegation stakeCred "pool1")
                     ]
                 }
             ]
@@ -232,11 +246,11 @@ modelTestDelegations proxy needsCollateral stakeAddr =
                         _mtxCollateral = SupportsPlutus $ Set.fromList [x | x <- [100], needsCollateral],
                         _mtxOutputs =
                           [ (103, modelTxOut "unstaked" (modelCoin 9_700_000_000_000)),
-                            (104, modelTxOut "reward-less-minimum" (modelReward stakeAddr $- modelCoin 100_000_000)),
+                            (104, modelTxOut "reward-less-minimum" (modelReward stakeCred $- modelCoin 100_000_000)),
                             (105, modelTxOut "minimum" (modelCoin 100_000_000))
                           ],
                         _mtxFee = modelCoin 100_000_000_000,
-                        _mtxWdrl = modelRewards [stakeAddr]
+                        _mtxWdrl = modelRewards [stakeCred]
                       }
                   ]
               ]
@@ -367,12 +381,12 @@ instance FTraversable ModelStats where ftraverse = gftraverse
 mstats :: ModelStats ((->) [ModelEpoch era])
 mstats =
   ModelStats
-    { _numberOfEpochs = (lengthOf (traverse)),
-      _numberOfTransactions = (lengthOf (traverse . modelTxs)),
-      _numberOfCerts = (lengthOf (traverse . modelDCerts)),
-      _blocksMade = (sumOf (traverse . modelEpoch_blocksMade . _ModelBlocksMade . traverse)),
-      _numberOfDelegations = (lengthOf (traverse . modelDCerts . _ModelDelegate)),
-      _withdrawals = (lengthOf (traverse . modelTxs . modelTx_wdrl . traverse))
+    { _numberOfEpochs = lengthOf (traverse),
+      _numberOfTransactions = lengthOf (traverse . modelTxs),
+      _numberOfCerts = lengthOf (traverse . modelDCerts),
+      _blocksMade = sumOf (traverse . modelEpoch_blocksMade . _ModelBlocksMade . traverse),
+      _numberOfDelegations = lengthOf (traverse . modelDCerts . _ModelDelegate),
+      _withdrawals = lengthOf (traverse . modelTxs . modelTx_wdrl . traverse)
     }
 
 mstatsCover :: ModelStats (Const (Double, String) :*: Predicate)
@@ -467,7 +481,7 @@ modelUnitTests proxy =
           )
           [ModelEpoch [] mempty],
       testGroup "deleg-keyHash" $ modelTestDelegations proxy False "keyHashStake",
-      testGroup "deleg-plutus" $ modelTestDelegations proxy True (ModelScriptAddress $ ModelPlutusScript_AlwaysSucceeds 4),
+      testGroup "deleg-plutus" $ modelTestDelegations proxy True alwaysSucceedsPlutusAddress,
       testProperty "xfer" $
         testChainModelInteraction
           proxy
@@ -734,7 +748,7 @@ modelUnitTests proxy =
                         _mtxOutputs =
                           [ (1, modelTxOut "bob" (modelCoin 100_000_000)),
                             ( 2,
-                              (modelTxOut (ModelScriptAddress $ ModelPlutusScript_AlwaysSucceeds 2) (modelCoin 1_000_000_000 $- (modelCoin 100_000_000 $+ modelCoin 1_000_000)))
+                              (modelTxOut alwaysSucceedsPlutusAddress (modelCoin 1_000_000_000 $- (modelCoin 100_000_000 $+ modelCoin 1_000_000)))
                                 { _mtxo_data = SupportsPlutus $ Just $ PlutusTx.I 7
                                 }
                             )
@@ -770,9 +784,9 @@ modelUnitTests_ =
 modelTxOut :: ModelAddress AllScriptFeatures -> ModelValue 'ExpectAnyOutput AllModelFeatures -> ModelTxOut AllModelFeatures
 modelTxOut a v = ModelTxOut a v (SupportsPlutus dh)
   where
-    dh = case a of
-      ModelAddress _ -> Nothing
-      ModelScriptAddress _ -> Just $ PlutusTx.I 42
+    dh = case _modelAddres_pmt a of
+      ModelKeyHashObj _ -> Nothing
+      ModelScriptHashObj _ -> Just $ PlutusTx.I 42
 
 defaultTestMain :: IO ()
 defaultTestMain = defaultMain modelUnitTests_

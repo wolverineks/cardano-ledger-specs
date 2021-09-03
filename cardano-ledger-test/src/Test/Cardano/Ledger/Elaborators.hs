@@ -39,7 +39,7 @@ import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import qualified Cardano.Ledger.Crypto as C
 import Cardano.Ledger.Era
 import Cardano.Ledger.Hashes (ScriptHash)
@@ -99,7 +99,6 @@ import Test.Cardano.Ledger.ModelChain.Address
 import Test.Cardano.Ledger.ModelChain.FeatureSet
 import Test.Cardano.Ledger.ModelChain.Script
 import Test.Cardano.Ledger.ModelChain.Value
-import Test.Shelley.Spec.Ledger.Generator.ScriptClass (mkKeyPairs)
 import Test.Shelley.Spec.Ledger.Utils (RawSeed (..), mkKeyPair, mkVRFKeyPair)
 import qualified Text.Show as Show
 
@@ -177,12 +176,12 @@ instance Monoid (EraElaboratorStats era) where
 
 data EraElaboratorState era = EraElaboratorState
   { _eesUnusedKeyPairs :: Word64,
-    _eesKeys :: Map.Map (ModelAddress (EraScriptFeature era)) (TestAddrInfo era),
-    _eesPools :: Map.Map ModelPoolId (TestPoolKey era),
+    _eesKeys :: Map.Map (ModelCredential 'Witness (EraScriptFeature era)) (TestCredentialInfo 'Witness era),
+    _eesPools :: Map.Map ModelPoolId (TestPoolKey (Crypto era)),
     _eesCurrentEpoch :: EpochNo,
     _eesUTxOs :: Map.Map ModelUTxOId (TestUTxOInfo era),
     _eesCurrentSlot :: SlotNo,
-    _eesStakeCredentials :: Map.Map (StakeCredential (Crypto era)) (ModelAddress (EraScriptFeature era)),
+    _eesStakeCredentials :: Map.Map (Credential 'Witness (Crypto era)) (ModelCredential 'Witness (EraScriptFeature era)),
     _eesStats :: EraElaboratorStats era
   }
 
@@ -260,16 +259,16 @@ elaborateModelRedeemer tx (TestRedeemer scriptPurpose dat exUnits) =
 eesUnusedKeyPairs :: Functor f => (Word64 -> f Word64) -> EraElaboratorState era -> f (EraElaboratorState era)
 eesUnusedKeyPairs a2fb s = (\b -> s {_eesUnusedKeyPairs = b}) <$> a2fb (_eesUnusedKeyPairs s)
 
-eesKeys :: Lens' (EraElaboratorState era) (Map.Map (ModelAddress (ScriptFeature (EraFeatureSet era))) (TestAddrInfo era))
+eesKeys :: Lens' (EraElaboratorState era) (Map.Map (ModelCredential 'Witness (ScriptFeature (EraFeatureSet era))) (TestCredentialInfo 'Witness era))
 eesKeys a2fb s = (\b -> s {_eesKeys = b}) <$> a2fb (_eesKeys s)
 
-eesPools :: Lens' (EraElaboratorState era) (Map.Map ModelPoolId (TestPoolKey era))
+eesPools :: Lens' (EraElaboratorState era) (Map.Map ModelPoolId (TestPoolKey (Crypto era)))
 eesPools a2fb s = (\b -> s {_eesPools = b}) <$> a2fb (_eesPools s)
 
 eesCurrentEpoch :: Functor f => (EpochNo -> f EpochNo) -> EraElaboratorState era -> f (EraElaboratorState era)
 eesCurrentEpoch a2fb s = (\b -> s {_eesCurrentEpoch = b}) <$> a2fb (_eesCurrentEpoch s)
 
-eesStakeCredentials :: Lens' (EraElaboratorState era) (Map.Map (StakeCredential (Crypto era)) (ModelAddress (EraScriptFeature era)))
+eesStakeCredentials :: Lens' (EraElaboratorState era) (Map.Map (Credential 'Witness (Crypto era)) (ModelCredential 'Witness (EraScriptFeature era)))
 eesStakeCredentials a2fb s = (\b -> s {_eesStakeCredentials = b}) <$> a2fb (_eesStakeCredentials s)
 
 eesUTxOs :: Lens' (EraElaboratorState era) (Map.Map ModelUTxOId (TestUTxOInfo era))
@@ -282,10 +281,13 @@ eesStats :: Lens' (EraElaboratorState era) (EraElaboratorStats era)
 eesStats a2fb s = (\b -> s {_eesStats = b}) <$> a2fb (_eesStats s)
 
 data TestAddrInfo era = TestAddrInfo
-  { _taiAddr :: Addr (Crypto era),
-    _taiPmt :: TestCredentialInfo 'Payment era,
+  { _taiPmt :: TestCredentialInfo 'Payment era,
     _taiStk :: TestCredentialInfo 'Staking era
   }
+
+getTaiAddr :: TestAddrInfo era -> Addr (Crypto era)
+getTaiAddr (TestAddrInfo (TestCredentialInfo pmt _) (TestCredentialInfo stk _)) =
+  Addr Testnet pmt (StakeRefBase stk)
 
 deriving instance Eq (Core.Script era) => Eq (TestAddrInfo era)
 
@@ -304,6 +306,8 @@ deriving instance Ord (Core.Script era) => Ord (TestCredentialInfo k era)
 
 deriving instance (C.Crypto (Crypto era), Show (Core.Script era)) => Show (TestCredentialInfo k era)
 
+instance HasKeyRole TestCredentialInfo
+
 data TestKey k era
   = TestKey_Keyed (TestKeyKeyed k (Crypto era))
   | TestKey_Script (TestKeyScript era)
@@ -313,6 +317,8 @@ deriving instance Eq (Core.Script era) => Eq (TestKey k era)
 deriving instance Ord (Core.Script era) => Ord (TestKey k era)
 
 deriving instance (C.Crypto (Crypto era), Show (Core.Script era)) => Show (TestKey k era)
+
+instance HasKeyRole TestKey
 
 data TestKeyKeyed (k :: KeyRole) c = TestKeyKeyed
   { _tkkKeyPair :: KeyPair k c,
@@ -333,36 +339,68 @@ deriving instance Ord (Core.Script era) => Ord (TestKeyScript era)
 
 deriving instance Show (Core.Script era) => Show (TestKeyScript era)
 
-elaborateModelAddress ::
-  forall era proxy.
+elaborateModelCredential ::
+  forall era k proxy.
   ElaborateEraModel era =>
   proxy era ->
   Word64 ->
-  ModelAddress (EraScriptFeature era) ->
-  TestAddrInfo era
-elaborateModelAddress _ seed (ModelAddress _) =
-  let keyPair@(pmtKey, stakeKey) = mkKeyPairs @(Crypto era) seed
+  ModelCredential k (EraScriptFeature era) ->
+  TestCredentialInfo k era
+elaborateModelCredential _ seed (ModelKeyHashObj _) =
+  let pmtKey =
+        uncurry KeyPair . swap $
+          mkKeyPair @(Crypto era) $
+            RawSeed seed seed seed seed seed
       pmtHash = hashKey $ vKey pmtKey
-      stakeHash = hashKey $ vKey stakeKey
-   in TestAddrInfo
-        (toAddr Testnet keyPair)
-        (TestCredentialInfo (KeyHashObj pmtHash) (TestKey_Keyed $ TestKeyKeyed pmtKey pmtHash))
-        (TestCredentialInfo (KeyHashObj stakeHash) (TestKey_Keyed $ TestKeyKeyed stakeKey stakeHash))
-elaborateModelAddress proxy _ (ModelScriptAddress ms) =
+   in TestCredentialInfo (KeyHashObj pmtHash) (TestKey_Keyed $ TestKeyKeyed pmtKey pmtHash)
+elaborateModelCredential proxy _ (ModelScriptHashObj ms) =
   let realPolicy = makePlutusScript proxy (SupportsPlutus $ elaborateModelScript ms)
-      pmtHash = hashScript @era realPolicy
-      stakeHash = hashScript @era realPolicy
-   in TestAddrInfo
-        (Addr Testnet (ScriptHashObj pmtHash) (StakeRefBase $ ScriptHashObj stakeHash))
-        (TestCredentialInfo (ScriptHashObj pmtHash) (TestKey_Script $ TestKeyScript realPolicy pmtHash))
-        (TestCredentialInfo (ScriptHashObj stakeHash) (TestKey_Script $ TestKeyScript realPolicy stakeHash))
-
-testStakeCredential ::
-  TestAddrInfo era ->
-  StakeCredential (Crypto era)
-testStakeCredential = _tciCred . _taiStk
+      scriptHash = hashScript @era realPolicy
+   in TestCredentialInfo
+        (ScriptHashObj scriptHash)
+        (TestKey_Script $ TestKeyScript realPolicy scriptHash)
 
 -- | get the TestKeyPair for a ModelAddress
+getCredentialForImpl ::
+  forall r m era proxy.
+  ( MonadState (EraElaboratorState era) m,
+    ElaborateEraModel era
+  ) =>
+  proxy era ->
+  ModelCredential r (EraScriptFeature era) ->
+  m (TestCredentialInfo r era)
+getCredentialForImpl proxy mCred = do
+  st <- use id
+  let mCred' = coerceKeyRole' mCred
+  case Map.lookup mCred' (_eesKeys st) of
+    Just k -> pure $ coerceKeyRole k
+    Nothing -> do
+      unusedKeyPairId <- eesUnusedKeyPairs <<%= succ
+      let k = elaborateModelCredential proxy unusedKeyPairId mCred'
+      eesKeys . at mCred' .= Just k
+      eesStakeCredentials . at (_tciCred k) .= Just mCred'
+      pure $ coerceKeyRole k
+
+getCredentialFor ::
+  forall r m era proxy.
+  ( MonadState (EraElaboratorState era) m,
+    ElaborateEraModel era
+  ) =>
+  proxy era ->
+  ModelCredential r (EraScriptFeature era) ->
+  m (Credential r (Crypto era))
+getCredentialFor proxy mCred = _tciCred <$> getCredentialForImpl proxy mCred
+
+getKeyFor ::
+  forall r m era proxy.
+  ( MonadState (EraElaboratorState era) m,
+    ElaborateEraModel era
+  ) =>
+  proxy era ->
+  ModelCredential r (EraScriptFeature era) ->
+  m (TestKey r era)
+getKeyFor proxy mCred = _tciKey <$> getCredentialForImpl proxy mCred
+
 getKeyPairForImpl ::
   forall m era proxy.
   ( MonadState (EraElaboratorState era) m,
@@ -371,16 +409,10 @@ getKeyPairForImpl ::
   proxy era ->
   ModelAddress (EraScriptFeature era) ->
   m (TestAddrInfo era)
-getKeyPairForImpl proxy mAddr = do
-  st <- use id
-  case Map.lookup mAddr (_eesKeys st) of
-    Just k -> pure k
-    Nothing -> do
-      unusedKeyPairId <- eesUnusedKeyPairs <<%= succ
-      let k = elaborateModelAddress proxy unusedKeyPairId mAddr
-      eesKeys . at mAddr .= Just k
-      eesStakeCredentials . at (testStakeCredential k) .= Just mAddr
-      pure k
+getKeyPairForImpl proxy (ModelAddress pmt stk) =
+  TestAddrInfo
+    <$> getCredentialForImpl proxy pmt
+    <*> getCredentialForImpl proxy stk
 
 getPmtKeyFor ::
   forall m era proxy.
@@ -398,9 +430,9 @@ getStakeKeyFor ::
     ElaborateEraModel era
   ) =>
   proxy era ->
-  ModelAddress (EraScriptFeature era) ->
+  ModelCredential 'Staking (EraScriptFeature era) ->
   m (TestKey 'Staking era)
-getStakeKeyFor proxy mAddr = _tciKey . _taiStk <$> getKeyPairForImpl proxy mAddr
+getStakeKeyFor proxy mAddr = _tciKey <$> getCredentialForImpl proxy mAddr
 
 -- | get the Addr for a ModelAddress
 getAddrFor ::
@@ -411,7 +443,7 @@ getAddrFor ::
   proxy era ->
   ModelAddress (EraScriptFeature era) ->
   m (Addr (Crypto era))
-getAddrFor proxy mAddr = _taiAddr <$> getKeyPairForImpl proxy mAddr
+getAddrFor proxy mAddr = getTaiAddr <$> getKeyPairForImpl proxy mAddr
 
 -- | get the Addr for a ModelAddress
 getStakingKeyHashFor ::
@@ -420,28 +452,28 @@ getStakingKeyHashFor ::
     ElaborateEraModel era
   ) =>
   proxy era ->
-  ModelAddress (EraScriptFeature era) ->
+  ModelCredential 'Staking ('TyScriptFeature 'False 'False) ->
   m (KeyHash 'Staking (Crypto era))
 getStakingKeyHashFor proxy maddr =
   let f (TestKey_Keyed (TestKeyKeyed _ k)) = k
       f _ = error $ ("unexpected script address:" <> show maddr)
-   in f . _tciKey . _taiStk <$> getKeyPairForImpl proxy maddr
+   in f . _tciKey <$> getCredentialForImpl proxy (liftModelCredential maddr)
 
-data TestPoolKey era = TestPoolKey
-  { _tpkHash :: KeyHash 'StakePool (Crypto era),
-    _tpkVRFHash :: Hash.Hash (C.HASH (Crypto era)) (Cardano.Crypto.VRF.Class.VerKeyVRF (C.VRF (Crypto era))),
-    _tpkKey :: KeyPair 'StakePool (Crypto era)
+data TestPoolKey crypto = TestPoolKey
+  { _tpkHash :: KeyHash 'StakePool crypto,
+    _tpkVRFHash :: Hash.Hash (C.HASH crypto) (Cardano.Crypto.VRF.Class.VerKeyVRF (C.VRF crypto)),
+    _tpkKey :: KeyPair 'StakePool crypto
   }
 
-instance Eq (TestPoolKey era) where
+instance Eq (TestPoolKey crypto) where
   a == b = compare a b == EQ
 
-instance Ord (TestPoolKey era) where
+instance Ord (TestPoolKey crypto) where
   compare =
     on compare _tpkHash
       <> on compare _tpkVRFHash
 
-deriving instance (C.Crypto (Crypto era)) => Show (TestPoolKey era)
+deriving instance (C.Crypto crypto) => Show (TestPoolKey crypto)
 
 getTestPoolKeyImpl ::
   ( MonadState (EraElaboratorState era) m,
@@ -449,7 +481,7 @@ getTestPoolKeyImpl ::
   ) =>
   proxy era ->
   ModelPoolId ->
-  m (TestPoolKey era)
+  m (TestPoolKey (Crypto era))
 getTestPoolKeyImpl proxy poolId = do
   st <- use id
   case Map.lookup poolId (_eesPools st) of
@@ -467,10 +499,9 @@ elaboratePoolId ::
   proxy era ->
   Word64 ->
   ModelPoolId ->
-  TestPoolKey era
+  TestPoolKey (Crypto era)
 elaboratePoolId _ seed (ModelPoolId _) =
-  let {- vrf@ -}
-      (_, vrf') = mkVRFKeyPair @(C.VRF (Crypto era)) (RawSeed 1 0 0 0 seed)
+  let (_, vrf') = mkVRFKeyPair @(C.VRF (Crypto era)) (RawSeed 1 0 0 0 seed)
       poolKey@(KeyPair _ _) = uncurry KeyPair . swap . mkKeyPair @(Crypto era) $ RawSeed 1 1 0 0 seed
       poolHash = hashKey $ vKey poolKey
    in TestPoolKey
@@ -486,25 +517,14 @@ getScriptWitnessFor ::
     ElaborateEraModel era
   ) =>
   proxy era ->
-  ModelAddress (EraScriptFeature era) ->
+  ModelCredential 'Witness (EraScriptFeature era) ->
   m (KeyHash 'Witness (Crypto era))
-getScriptWitnessFor proxy maddr0 = case filterModelAddress (eraFeatureSet (Proxy @era)) maddr0 of
+getScriptWitnessFor proxy maddr0 = case filterModelCredential (eraFeatureSet (Proxy @era)) maddr0 of
   Nothing -> error $ "unexpectedly unupgradable address: " <> show maddr0
   Just maddr ->
     let f (TestKey_Keyed (TestKeyKeyed _ x)) = x
         f (TestKey_Script _) = error $ "unexpected script addr in timelock" <> show maddr0
-     in coerceKeyRole @_ @_ @(Crypto era) . f . _tciKey . _taiPmt <$> getKeyPairForImpl proxy maddr
-
--- | get the StakeCredential for a ModelAddress
-getStakeCredenetialFor ::
-  forall m era proxy.
-  ( MonadState (EraElaboratorState era) m,
-    ElaborateEraModel era
-  ) =>
-  proxy era ->
-  ModelAddress (EraScriptFeature era) ->
-  m (StakeCredential (Crypto era))
-getStakeCredenetialFor proxy maddr = _tciCred . _taiStk <$> getKeyPairForImpl proxy maddr
+     in coerceKeyRole @_ @_ @(Crypto era) . f . _tciKey <$> getCredentialForImpl proxy maddr
 
 instance Default (EraElaboratorState era) where
   def =
@@ -533,11 +553,11 @@ tellMintWitness _ modelPolicy policyHash realPolicy = do
     mempty
       { _eesScripts = ElaboratedScriptsCache $ Map.singleton policyHash realPolicy
       }
-  myKeys :: [TestKey 'Payment era] <- case modelPolicy of
+  myKeys :: [TestKey 'Witness era] <- case modelPolicy of
     ModelScript_PlutusV1 _s1 ->
       pure [TestKey_Script $ TestKeyScript realPolicy policyHash]
     ModelScript_Timelock tl -> for (modelScriptNeededSigs tl) $ \mAddr -> do
-      State.state $ State.runState $ zoom _2 $ getPmtKeyFor (Proxy :: Proxy era) mAddr
+      State.state $ State.runState $ zoom _2 $ getKeyFor (Proxy :: Proxy era) $ liftModelCredential mAddr
   for_ myKeys $ tellWitness (Minting $ PolicyID policyHash)
 
 noScriptAction ::
@@ -919,7 +939,7 @@ class
     ModelScript_PlutusV1 ms ->
       pure $ makePlutusScript (Proxy :: Proxy era) (SupportsPlutus $ elaborateModelScript ms)
     ModelScript_Timelock ms -> do
-      x <- elaborateModelTimelock (zoom _2 . getScriptWitnessFor (Proxy :: Proxy era) . liftModelAddress) ms
+      x <- elaborateModelTimelock (zoom _2 . getScriptWitnessFor (Proxy :: Proxy era) . liftModelCredential) ms
       pure $ makeTimelockScript (Proxy :: Proxy era) $ SupportsTimelock x
 
   -- | Construct a TxBody from some elaborated inputs.
@@ -984,7 +1004,7 @@ class
         wdrl' <-
           fmap Map.fromList $
             for (Map.toList mtxWdrl) $ \(mAddr, ModelValue mqty) -> do
-              stakeCredential <- zoom _2 $ getStakeCredenetialFor proxy mAddr
+              stakeCredential <- zoom _2 $ getCredentialFor proxy mAddr
               stakeKey <- zoom _2 $ getStakeKeyFor proxy mAddr
               let ra = RewardAcnt Testnet stakeCredential
               tellWitness (Rewarding ra) stakeKey
@@ -1109,12 +1129,12 @@ class
     (dc, dcwits) <- Writer.runWriterT $ case mdc of
       ModelRegisterStake maddr ->
         DCertDeleg . RegKey
-          <$> getStakeCredenetialFor proxy maddr
+          <$> getCredentialFor proxy maddr
       ModelDeRegisterStake maddr ->
         DCertDeleg . DeRegKey
-          <$> getStakeCredenetialFor proxy maddr
+          <$> getCredentialFor proxy maddr
       ModelDelegate (ModelDelegation mdelegator mdelegatee) -> do
-        dtor <- getStakeCredenetialFor proxy mdelegator
+        dtor <- getCredentialFor proxy mdelegator
         dtee <- _tpkHash <$> getTestPoolKeyImpl proxy mdelegatee
         stakeKey <- getStakeKeyFor proxy mdelegator
         Writer.tell [stakeKey]
@@ -1123,8 +1143,8 @@ class
         TestPoolKey poolId poolVRF poolKey <- getTestPoolKeyImpl proxy mPoolId
         lift $ tellWitnessKey poolKey
         poolOwners <- Set.fromList <$> traverse (getStakingKeyHashFor proxy) mOwners
-        for_ mOwners $ Writer.tell . pure <=< getStakeKeyFor proxy
-        rAcnt <- RewardAcnt Testnet <$> getStakeCredenetialFor proxy mRAcnt
+        for_ mOwners $ Writer.tell . pure <=< getKeyFor proxy . liftModelCredential
+        rAcnt <- RewardAcnt Testnet <$> getCredentialFor proxy mRAcnt
         pure $
           (DCertPool . RegPool) $
             PoolParams
@@ -1224,13 +1244,13 @@ observeRewards ::
   forall era.
   ModelTxId ->
   (NewEpochState era, EraElaboratorState era) ->
-  Map.Map (ModelAddress (EraScriptFeature era)) Coin
+  Map.Map (ModelCredential 'Staking (EraScriptFeature era)) Coin
 observeRewards mtxid (nes, ems) =
   let creds = _eesStakeCredentials ems
    in Map.fromList $ do
         (a, b) <- Map.toList . LedgerState._rewards . LedgerState._dstate . LedgerState._delegationState . LedgerState.esLState $ LedgerState.nesEs nes
-        a' <- case Map.lookup a creds of
-          Just a' -> pure a'
+        a' <- case Map.lookup (asWitness a) creds of
+          Just a' -> pure $ coerceKeyRole' a'
           Nothing -> error $ unwords ["observeRewards:", show mtxid, "can't find", show a]
         pure (a', b)
 

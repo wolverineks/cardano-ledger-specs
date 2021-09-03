@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -19,31 +20,19 @@ import Cardano.Ledger.Keys
 import Cardano.Ledger.ShelleyMA.Timelocks
 import Cardano.Slotting.Slot hiding (at)
 import Control.DeepSeq
+import Data.Coerce (Coercible, coerce)
+import Data.Kind (Type)
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified GHC.Exts as GHC
 import GHC.Generics
 import Numeric.Natural (Natural)
 import Test.Cardano.Ledger.ModelChain.FeatureSet
 
-data ModelAddress (k :: TyScriptFeature) where
-  ModelAddress :: String -> ModelAddress k
-  ModelScriptAddress :: ModelPlutusScript -> ModelAddress ('TyScriptFeature x 'True)
-
-instance NFData (ModelAddress k) where
-  rnf = \case
-    ModelAddress a -> rnf a
-    ModelScriptAddress a -> rnf a
-
-liftModelAddress ::
-  ModelAddress ('TyScriptFeature 'False 'False) ->
-  ModelAddress a
-liftModelAddress (ModelAddress a) = ModelAddress a
-
-liftModelAddress' ::
-  ModelAddress a ->
-  ModelAddress ('TyScriptFeature 'True 'True)
-liftModelAddress' (ModelAddress a) = ModelAddress a
-liftModelAddress' (ModelScriptAddress a) = ModelScriptAddress a
+data ModelAddress (k :: TyScriptFeature) = ModelAddress
+  { _modelAddres_pmt :: ModelCredential 'Payment k,
+    _modelAddres_stk :: ModelCredential 'Staking k
+  }
+  deriving (Generic)
 
 deriving instance Eq (ModelAddress k)
 
@@ -52,7 +41,65 @@ deriving instance Ord (ModelAddress k)
 deriving instance Show (ModelAddress k)
 
 instance GHC.IsString (ModelAddress k) where
-  fromString s = ModelAddress s
+  fromString s = ModelAddress (GHC.fromString s) (GHC.fromString s)
+
+instance NFData (ModelAddress k)
+
+-- | Polykinded HasKeyRole
+class HasKeyRole' (a :: KeyRole -> k -> Type) where
+  -- | General coercion of key roles.
+  --
+  --   The presence of this function is mostly to help the user realise where they
+  --   are converting key roles.
+  coerceKeyRole' ::
+    a r x ->
+    a r' x
+  default coerceKeyRole' ::
+    Coercible (a r x) (a r' x) =>
+    a r x ->
+    a r' x
+  coerceKeyRole' = coerce
+
+data ModelCredential (r :: KeyRole) (k :: TyScriptFeature) where
+  ModelKeyHashObj :: String -> ModelCredential r k
+  ModelScriptHashObj :: ModelPlutusScript -> ModelCredential r ('TyScriptFeature x 'True)
+
+deriving instance Eq (ModelCredential r k)
+
+deriving instance Ord (ModelCredential r k)
+
+deriving instance Show (ModelCredential r k)
+
+instance GHC.IsString (ModelCredential r k) where
+  fromString = ModelKeyHashObj
+
+instance HasKeyRole' ModelCredential
+
+instance NFData (ModelCredential r k) where
+  rnf = \case
+    ModelKeyHashObj x -> rnf x
+    ModelScriptHashObj x -> rnf x
+
+liftModelAddress ::
+  ModelAddress ('TyScriptFeature 'False 'False) ->
+  ModelAddress a
+liftModelAddress (ModelAddress a b) = ModelAddress (liftModelCredential a) (liftModelCredential b)
+
+liftModelCredential ::
+  ModelCredential r ('TyScriptFeature 'False 'False) ->
+  ModelCredential r a
+liftModelCredential (ModelKeyHashObj a) = ModelKeyHashObj a
+
+liftModelAddress' ::
+  ModelAddress a ->
+  ModelAddress ('TyScriptFeature 'True 'True)
+liftModelAddress' (ModelAddress a b) = ModelAddress (liftModelCredential' a) (liftModelCredential' b)
+
+liftModelCredential' ::
+  ModelCredential r a ->
+  ModelCredential r ('TyScriptFeature 'True 'True)
+liftModelCredential' (ModelKeyHashObj a) = ModelKeyHashObj a
+liftModelCredential' (ModelScriptHashObj a) = ModelScriptHashObj a
 
 data ModelScript (k :: TyScriptFeature) where
   ModelScript_Timelock :: ModelTimelock -> ModelScript ('TyScriptFeature 'True x)
@@ -76,11 +123,11 @@ data ModelPlutusScript
 
 instance NFData ModelPlutusScript
 
-modelScriptNeededSigs :: ModelTimelock -> [ModelAddress k]
+modelScriptNeededSigs :: ModelTimelock -> [ModelCredential 'Witness ('TyScriptFeature 'False 'False)]
 modelScriptNeededSigs = go
   where
     go = \case
-      ModelTimelock_Signature (ModelAddress ma) -> [ModelAddress ma]
+      ModelTimelock_Signature ma -> [ma]
       ModelTimelock_AllOf xs -> go =<< xs
       ModelTimelock_AnyOf xs -> go =<< take 1 xs
       ModelTimelock_MOfN n xs -> go =<< take n xs
@@ -92,7 +139,7 @@ modelScriptNeededSigs = go
 -- visible in the model; it should probably be refactored to use epochs + slot
 -- in epoch
 data ModelTimelock
-  = ModelTimelock_Signature (ModelAddress ('TyScriptFeature 'False 'False))
+  = ModelTimelock_Signature (ModelCredential 'Witness ('TyScriptFeature 'False 'False))
   | ModelTimelock_AllOf [ModelTimelock]
   | ModelTimelock_AnyOf [ModelTimelock]
   | ModelTimelock_MOfN Int [ModelTimelock] -- Note that the Int may be negative in which case (MOfN -2 [..]) is always True
@@ -105,7 +152,7 @@ instance NFData ModelTimelock
 elaborateModelTimelock ::
   forall crypto m.
   (C.Crypto crypto, Applicative m) =>
-  (ModelAddress ('TyScriptFeature 'False 'False) -> m (KeyHash 'Witness crypto)) ->
+  (ModelCredential 'Witness ('TyScriptFeature 'False 'False) -> m (KeyHash 'Witness crypto)) ->
   ModelTimelock ->
   m (Timelock crypto)
 elaborateModelTimelock f = go

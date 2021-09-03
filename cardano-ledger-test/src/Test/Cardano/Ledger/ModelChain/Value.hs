@@ -131,7 +131,7 @@ pointWise' z p = \xs ys ->
 {-# INLINE pointWise' #-}
 
 newtype ModelValueSimple a = ModelValueSimple {unModelValueSimple :: (Coin, GrpMap a (Sum Integer))}
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 instance Ord a => Semigroup (ModelValueSimple a) where
   ModelValueSimple x <> ModelValueSimple y = ModelValueSimple (x <> y)
@@ -158,6 +158,8 @@ instance Ord a => Val (ModelValueSimple a) where
   inject x = ModelValueSimple (x, mempty)
   size _ = 1
   pointwise f (ModelValueSimple (Coin x, y)) (ModelValueSimple (Coin x', y')) = f x x' && pointWise' 0 f (coerce y) (coerce y')
+
+instance NFData a => NFData (ModelValueSimple a)
 
 -- evaluate a modelValue and compute the linear sum of all free variables.  Not
 -- unlike a MA token, but
