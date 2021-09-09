@@ -324,7 +324,7 @@ therefore vulnerable to the consequences of changing the slot length.
      &\text{Summarizes transaction data} \\~\\
      &\fun{valContext} \in \TxInfo \to \ScriptPurpose \to \Data \\
      &\text{Pairs transaction data with a script purpose} \\~\\
-     &\fun{runPLCScript} \in \ScriptPlutus \to \seqof{\Data} \to \ExUnits \to \CostMod \to
+     &\fun{runPLCScript} \in \CostMod \to \ScriptPlutus \to \ExUnits \to \seqof{\Data} \to
      \IsValid \\
      &\text{Validate a Plutus script, taking resource limits into account}
   \end{align*}
@@ -333,7 +333,7 @@ therefore vulnerable to the consequences of changing the slot length.
   %
   \begin{align*}
     \llbracket \var{script_v} \rrbracket_{\var{cm},\var{eu}}~\var{d}
-    &=& \fun{runPLCScript} ~\var{script_v}~\var{d}~\var{eu}~{cm}
+    &=& \fun{runPLCScript}~{cm} ~\var{script_v}~\var{eu}~\var{d}
   \end{align*}
   \caption{Script Validation, cont.}
   \label{fig:defs:functions-valid}
