@@ -65,6 +65,7 @@ library
     Test.Shelley.Spec.Ledger.Generator.ScriptClass
     Test.Shelley.Spec.Ledger.Generator.ShelleyEraGen
     Test.Shelley.Spec.Ledger.Orphans
+    Test.Shelley.Spec.Ledger.PackedBytes
     Test.Shelley.Spec.Ledger.Rules.ClassifyTraces
     Test.Shelley.Spec.Ledger.Serialisation.CDDLUtils
     Test.Shelley.Spec.Ledger.Serialisation.Generators
@@ -89,7 +90,6 @@ library
   build-depends:
     base16-bytestring >= 1,
     bytestring,
-    bytestring-conversion,
     cardano-binary,
     cardano-crypto-class,
     cardano-crypto-test,
@@ -104,6 +104,7 @@ library
     cborg,
     containers,
     data-default-class,
+    deepseq,
     directory,
     generic-random,
     hashable,
@@ -111,6 +112,7 @@ library
     hedgehog >= 1.0.4,
     iproute,
     nothunks,
+    primitive,
     process-extras,
     plutus-ledger-api,
     prettyprinter,
