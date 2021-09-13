@@ -2,6 +2,7 @@
 module Data.Messages where
 
 import qualified Data.Map.Strict as Map
+import Cardano.Prelude (HeapWords(..))
 
 -- ===================================================================
 
@@ -102,3 +103,17 @@ instance Show v => Show (Message v) where
   show (Upsert x) = "(Upsert " ++ show x ++ ")"
 
 instance Exp Int where plus x y = x + y
+
+
+instance  (HeapWords k, HeapWords v) => HeapWords (Delta k v) where
+  heapWords (Delta x) = heapWords x
+
+instance HeapWords v => HeapWords (Message v) where
+  heapWords (Edit x) = 2 + heapWords x
+  heapWords Delete = 1
+  heapWords (Upsert x) = 2 + heapWords x
+
+instance HeapWords v => HeapWords (Function v) where
+  heapWords Identity = 1
+  heapWords (Plus x) = 2 + heapWords x
+  heapWords (Compose x y) = 3 + heapWords x + heapWords y

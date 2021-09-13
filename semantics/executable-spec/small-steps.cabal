@@ -62,6 +62,7 @@ library
                      , base >=4.11 && <5
                      , bytestring
 		     , cardano-binary
+		     , cardano-prelude
                      , cborg
                      , containers
                      , cryptonite

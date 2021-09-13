@@ -1,9 +1,12 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts  #-}
 
 module Test.Shelley.Spec.Ledger.CompactMap where
 
@@ -18,6 +21,8 @@ import Shelley.Spec.Ledger.Tx (TxId(..),TxIn(..), TxOut)
 -- import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C,C_Crypto)
 -- import Cardano.Ledger.Era(Crypto)
 import Cardano.Prelude (HeapWords(..))
+import Shelley.Spec.Ledger.TxBody(TxOut(..))
+import Shelley.Spec.Ledger.CompactAddr(CompactAddr(..))
 
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Shelley (ShelleyEra)
@@ -38,127 +43,203 @@ import Data.Primitive.Types(Prim(..), defaultSetByteArray#, defaultSetOffAddr# )
 -- https://downloads.haskell.org/~ghc/8.10.4/docs/html/libraries/base-4.14.1.0/GHC-Exts.html#v:indexWord32Array-35-
 import GHC.Exts
   ( (+#), (*#), State#, Int#,
-    indexWord8ArrayAsWord16#,
+
     indexWord8ArrayAsWord64#,
     readWord8ArrayAsWord64#,
-    readWord8ArrayAsWord16#,
     writeWord8ArrayAsWord64#,
-    writeWord8ArrayAsWord16#,
     indexWord64OffAddr#,
-    indexWord16OffAddr#,
     readWord64OffAddr#,
-    readWord16OffAddr#,
     writeWord64OffAddr#,
+
+    indexWord8ArrayAsWord32#,    
+    readWord8ArrayAsWord32#,
+    writeWord8ArrayAsWord32#,
+    indexWord32OffAddr#,
+    readWord32OffAddr#,
+    writeWord32OffAddr#,
+
+    indexWord8ArrayAsWord16#,    
+    readWord8ArrayAsWord16#,
+    writeWord8ArrayAsWord16#,
+    indexWord16OffAddr#,
+    readWord16OffAddr#,
     writeWord16OffAddr#,
   )
 
 import Data.Primitive.ByteArray
-import Data.Primitive.PrimArray(PrimArray,primArrayFromList)
+import Data.Primitive.PrimArray(PrimArray,primArrayFromList,indexPrimArray,sizeofPrimArray)
+import qualified Data.Primitive.PrimArray as PA
 
 import Debug.Trace
 import Data.Primitive.PrimArray(PrimArray)
+import qualified Data.Array as A
 
 -- ==========================================
-data TT = TT Word64 Word64 Word64 Word16 deriving Show
 
--- | Offsets (in Bytes) of the arguments (TT w1 w2 w3 w4)
-w1offset, w2offset, w3offset, w4offset :: Int
+instance (Prim a, HeapWords a) => HeapWords(PrimArray a) where
+  heapWords arr = 2 + (sizeofPrimArray arr * heapWords (indexPrimArray arr 0))
+
+-- ==========================================
+data TT = TT Word64 Word64 Word64 Word32 Word64 deriving (Eq,Ord,Show)
+
+instance HeapWords TT where
+  heapWords (TT _ _ _ _ _) = 6
+
+txInToTT :: TxIn StandardCrypto -> TT
+txInToTT txin =
+ let TxInCompact (TxId safe) w5 = txin
+     UnsafeHash bytes = extractHash safe 
+ in case (packBytes bytes) :: PackedBytes 28 of
+       PackedBytes28 w1 w2 w3 w4 -> TT w1 w2 w2 w4 w5
+       _ -> error ("BAD TxIn")  
+
+
+-- | Offsets (in Bytes) of the arguments (TT w1 w2 w3 w4 w5)
+w1offset, w2offset, w3offset, w4offset, w5offset :: Int
 w1offset = 0
 w2offset = 8
 w3offset = 16
 w4offset = 24
+w5offset = 31
 
 instance Prim TT where
-  sizeOf# (TT w1 w2 w3 w4) = (sizeOf# w1 +#  sizeOf# w2  +# sizeOf# w3 +#  sizeOf# w4)
+  sizeOf# _ = (4# *# sizeOf# (undefined ::Word64) +#  sizeOf#  (undefined ::Word32))
   alignment# x = sizeOf# x -- Pack as tight as possible.
   indexByteArray# arr# i# = 
-    let i2# = i# *# 26#
+    let i2# = i# *# sizeOf# (undefined :: TT)
     in TT (W64# (indexWord8ArrayAsWord64# arr# (i2# +# unInt w1offset)))
           (W64# (indexWord8ArrayAsWord64# arr# (i2# +# unInt w2offset)))
           (W64# (indexWord8ArrayAsWord64# arr# (i2# +# unInt w3offset)))
-          (W16# (indexWord8ArrayAsWord16# arr# (i2# +# unInt w4offset)))      
+          (W32# (indexWord8ArrayAsWord32# arr# (i2# +# unInt w4offset)))
+          (W64# (indexWord8ArrayAsWord64# arr# (i2# +# unInt w5offset)))      
 
   readByteArray# arr# i# =
     \s0 -> case readWord8ArrayAsWord64# arr# (i2# +# unInt w1offset) s0 of
        (# s1, w1 #) -> case readWord8ArrayAsWord64# arr#  (i2# +# unInt w2offset) s1 of
           (# s2, w2 #) -> case readWord8ArrayAsWord64# arr#  (i2# +# unInt w3offset) s2 of
-             (# s3, w3 #) -> case readWord8ArrayAsWord16# arr#  (i2# +# unInt w3offset) s3 of
-                (# s4, w4 #) -> (# s4, TT (W64# w1) (W64# w2) (W64# w3) (W16# w4) #)
-   where i2# =  26# *# i#
+             (# s3, w3 #) -> case readWord8ArrayAsWord32# arr#  (i2# +# unInt w4offset) s3 of
+                (# s4, w4 #) -> case readWord8ArrayAsWord64# arr#  (i2# +# unInt w5offset) s4 of
+                   (# s5, w5 #) -> (# s5, TT (W64# w1) (W64# w2) (W64# w3) (W32# w4) (W64# w5) #)
+   where i2# = i# *# sizeOf# (undefined :: TT)
 
-  writeByteArray# arr# i# (TT (W64# w1) (W64# w2) (W64# w3) (W16# w4)) =
+  writeByteArray# arr# i# (TT (W64# w1) (W64# w2) (W64# w3) (W32# w4) (W64# w5)) =
       \s0 -> case writeWord8ArrayAsWord64# arr# (i2# +# unInt w1offset) w1 s0 of
           s1 -> case writeWord8ArrayAsWord64# arr#  (i2# +# unInt w2offset) w2 s1 of
              s2 -> case writeWord8ArrayAsWord64# arr# (i2# +# unInt w3offset) w3 s2 of
-                s3 -> case writeWord8ArrayAsWord16# arr#  (i2# +# unInt w3offset) w4 s3 of
-                   s4 -> s4
-   where i2# =  26# *# i#
+                s3 -> case writeWord8ArrayAsWord32# arr#  (i2# +# unInt w4offset) w4 s3 of
+                   s4 -> case writeWord8ArrayAsWord64# arr#  (i2# +# unInt w5offset) w5 s4 of
+                      s5 -> s5
+   where i2# =  i# *# sizeOf# (undefined :: TT)
 
   setByteArray# arr n m a state = defaultSetByteArray# arr n m a state
   
   indexOffAddr# arr# i# =
-    let i2# = i# *# 26#
+    let i2# = i# *# sizeOf# (undefined :: TT)
     in TT (W64# (indexWord64OffAddr# arr# (i2# +# unInt w1offset)))
           (W64# (indexWord64OffAddr# arr# (i2# +# unInt w2offset)))
           (W64# (indexWord64OffAddr# arr# (i2# +# unInt w3offset)))
-          (W16# (indexWord16OffAddr# arr# (i2# +# unInt w4offset)))      
+          (W32# (indexWord32OffAddr# arr# (i2# +# unInt w4offset)))
+          (W64# (indexWord64OffAddr# arr# (i2# +# unInt w5offset)))      
+
 
   readOffAddr# arr# i# =
        \s0 -> case readWord64OffAddr#  arr# (i2# +# unInt w1offset) s0 of
         (# s1, w1 #) -> case readWord64OffAddr#  arr#  (i2# +# unInt w2offset) s1 of
           (# s2, w2 #) -> case readWord64OffAddr#  arr#  (i2# +# unInt w3offset) s2 of
-            (# s3, w3 #) -> case readWord16OffAddr#  arr#  (i2# +# unInt w3offset) s3 of
-              (# s4, w4 #) -> (# s4, TT (W64# w1) (W64# w2) (W64# w3) (W16# w4) #)
-    where i2# =  26# *# i#
+            (# s3, w3 #) -> case readWord32OffAddr#  arr#  (i2# +# unInt w4offset) s3 of
+              (# s4, w4 #) -> case readWord64OffAddr#  arr#  (i2# +# unInt w5offset) s2 of
+                 (# s5, w5 #) -> (# s5, TT (W64# w1) (W64# w2) (W64# w3) (W32# w4) (W64# w5) #)
+    where i2# =  i# *# sizeOf# (undefined :: TT)
 
-  writeOffAddr# arr# i# (TT (W64# w1) (W64# w2) (W64# w3) (W16# w4)) =
+  writeOffAddr# arr# i# (TT (W64# w1) (W64# w2) (W64# w3) (W32# w4) (W64# w5)) =
       \s0 -> case writeWord64OffAddr# arr# (i2# +# unInt w1offset) w1 s0 of
           s1 -> case writeWord64OffAddr# arr#  (i2# +# unInt w2offset) w2 s1 of
              s2 -> case writeWord64OffAddr# arr# (i2# +# unInt w3offset) w3 s2 of
-                s3 -> case writeWord16OffAddr# arr#  (i2# +# unInt w3offset) w4 s3 of
-                   s4 -> s4
-   where i2# =  26# *# i#
+                s3 -> case writeWord32OffAddr# arr#  (i2# +# unInt w4offset) w4 s3 of
+                   s4 -> case writeWord64OffAddr# arr# (i2# +# unInt w5offset) w5 s4 of
+                      s5 -> s5
+   where i2# =  i# *# sizeOf# (undefined :: TT)
    
   setOffAddr# = defaultSetOffAddr# 
 
+unInt :: Int -> Int#
 unInt (I# x) = x
 tt :: TT
-tt = TT 1 2 3 4
+tt = TT 1 2 3 4 6
 
 
-pa = primArrayFromList [TT 1 2 3 4, TT 8 7 6 5]
+pa :: PrimArray TT
+pa = primArrayFromList [TT 1 2 3 4 99, TT 8 7 6 5 21, TT 1 1 1 1 4]
+
+-- ===============================================
+
+class Indexable t a where
+   index:: t a -> Int -> a
+   isize :: t a -> Int
+
+binsearch:: (Ord k, Indexable arr k) => Int -> Int -> k -> arr k -> Maybe Int
+binsearch lo hi _k _v | lo > hi = Nothing
+binsearch lo hi k v | lo==hi = if index v lo == k then Just lo else Nothing
+binsearch lo _hi k v | index v lo == k = Just lo
+binsearch _lo hi k v | index v hi == k = Just hi
+binsearch lo hi _k _v | lo+1== hi = Nothing
+binsearch lo hi k v = (if index v mid > k then binsearch lo mid k v else binsearch mid hi k v)
+   where mid = lo + (div (hi-lo) 2)
+
+search :: (Ord k, Indexable arr k) => k -> arr k -> Maybe Int
+search key v = binsearch 0 (isize v - 1) key v
+
+
+-- vv c = search c (VUnbox.fromList "bcdwxy")
+
+alub :: (Ord t1, Indexable t2 t1) => (Int, Int) -> t2 t1 -> t1 -> Maybe (Int, t1)
+alub (lo,hi) arr target
+  | lo > hi = Nothing
+  | target <= index arr lo = Just(lo,index arr lo)
+  | lo==hi = Nothing
+  | lo+1 == hi && index arr lo < target && target <= index arr hi = Just(hi,index arr hi)
+  | True = if target <= index arr mid then (alub (lo,mid) arr target) else (alub (mid,hi) arr target)
+      where mid = lo + (div (hi-lo) 2)
+      
+instance Prim a => Indexable PrimArray a where
+  index = indexPrimArray
+  isize = sizeofPrimArray
+
+instance Indexable (A.Array Int) a where
+  index = (A.!)
+  isize arr = (hi - lo) + 1 where (lo,hi) = A.bounds arr
+
 
 -- ===========================================
 data ParVector k v where
-   ParVector:: (VGen.Vector vec v, Prim i) =>  (i-> k) -> (k -> i) -> (VUnbox.Vector i) -> (vec v) -> ParVector k v
+   ParVector:: (Prim k) => (PrimArray k) -> (A.Array Int v) -> ParVector k v
 
-binsearch:: (Ord k, VUnbox.Unbox k) => Int -> Int -> k -> VUnbox.Vector k -> Maybe Int
-binsearch lo hi k v | lo > hi = Nothing
-binsearch lo hi k v | lo==hi = if  (VUnbox.!) v lo == k then Just lo else Nothing
-binsearch lo hi k v | (VUnbox.!) v lo == k = Just lo
-binsearch lo hi k v | (VUnbox.!) v hi == k = Just hi
-binsearch lo hi k v | lo+1== hi = Nothing
-binsearch lo hi k v = trace ("XXX "++show(lo,mid,hi)) (if (VUnbox.!) v mid > k then binsearch lo mid k v else binsearch mid hi k v)
-   where mid = lo + (div (hi-lo) 2)
+instance (HeapWords k, HeapWords v) => HeapWords (ParVector k v) where
+  heapWords (ParVector k v) = trace ("HW PARVECTOR "++show hwk ++"  "++show hwv) (3 + hwk + hwv)
+      where hwk = heapWords k
+            hwv = heapWords v
+instance (HeapWords v) => HeapWords (A.Array Int v) where
+  heapWords arr = foldl accum (3 + (trace (" -- Array Size = "++show n) n)) arr
+     where accum ans v = ans + heapWords v
+           n = isize arr
+           
+instance (Show k, Show v, Prim k) => Show (ParVector k v) where
+  show (ParVector ks vs) = show ks ++"\n"++show vs
 
-search :: (Ord k, VUnbox.Unbox k) => k -> VUnbox.Vector k -> Maybe Int
-search key v = binsearch 0 (VUnbox.length v - 1) key v
 
+toPar m = ParVector keys values
+  where pairs = Map.toAscList m
+        keys = primArrayFromList (map fst pairs)
+        values = A.listArray (0,isize keys - 1) (map snd pairs)
 
-vv c = search c (VUnbox.fromList "bcdwxy")
+m1 = Map.fromList [(1::Int,'a'),(2,'b'),(9,'c'),(5,'d')]
 
-alub :: (Ord t, VUnbox.Unbox t) => (Int, Int) -> VUnbox.Vector t -> t -> Maybe (Int, t)
-alub (first,last) arr target
-  | first > last = Nothing
-  | target <= arr VUnbox.! first = Just(first,arr VUnbox.! first)
-  | first==last = Nothing
-  | first+1 == last && arr VUnbox.! first < target && target <= arr VUnbox.! last = Just(last,arr  VUnbox.! last)
-  | True = if target <= arr VUnbox.! mid then (alub (first,mid) arr target) else (alub (mid,last) arr target)
-      where mid = first + (div (last-first) 2)
-      
 
 look :: Ord k => k -> ParVector k v -> Maybe v
-look k (ParVector toK fromK keys values) = undefined
+look k (ParVector keys values) =
+   case search k keys of
+      Just i -> Just $ index values i
+      Nothing -> Nothing 
 
 
 
@@ -166,23 +247,24 @@ look k (ParVector toK fromK keys values) = undefined
 
 type Shelley = ShelleyEra StandardCrypto
 
-instance Memory (TxIn StandardCrypto) where
-  memory x = heapWords x
-
-instance Memory (TxOut Shelley) where
-  memory x = heapWords x
 
 main :: IO ()
 main = do
   pairs <- generate (vector 100000 :: Gen [(TxIn StandardCrypto,TxOut Shelley)])
   let m = Map.fromList pairs
+      m2 = Map.mapKeys txInToTT m
+      pm = toPar m2
       keys = Set.fromList $ map fst (take 100 pairs)
       norm = (heapWords m)
-      compact = (memory(initMap m keys))
-  putStrLn (unlines ["Size "++show(Map.size m)++" entries"
+      compact = (heapWords(initMap m keys))
+      par = (heapWords pm)
+      
+  putStrLn (unlines ["Size "++show(Map.size m)++" entries "++show(Map.size m2)
                     ,"Normal  "++show norm++" words"
                     ,"Compact "++show compact++" words"
                     ,"Percent " ++show((fromIntegral compact / fromIntegral norm)*100 :: Double)
+                    ,"Parallel "++show par++" words"
+                    ,"Percent " ++show((fromIntegral par / fromIntegral norm)*100 :: Double)
                     ])
 
 
@@ -194,3 +276,6 @@ aa = do txin <- generate (arbitrary :: Gen (TxIn  StandardCrypto))
           PackedBytes32 w1 w2 w3 w4 -> pure (bytes,[w1,w2,w3,w4],Short.length bytes)
           _ -> putStrLn ("BAD ") >> pure( bytes,[],Short.length bytes)
         
+
+-- =======================================
+
