@@ -20,6 +20,7 @@ import Cardano.Ledger.Keys
 import Cardano.Ledger.ShelleyMA.Timelocks
 import Cardano.Slotting.Slot hiding (at)
 import Control.DeepSeq
+import Control.Lens
 import Data.Coerce (Coercible, coerce)
 import Data.Kind (Type)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -29,10 +30,18 @@ import Numeric.Natural (Natural)
 import Test.Cardano.Ledger.ModelChain.FeatureSet
 
 data ModelAddress (k :: TyScriptFeature) = ModelAddress
-  { _modelAddres_pmt :: ModelCredential 'Payment k,
-    _modelAddres_stk :: ModelCredential 'Staking k
+  { _modelAddress_pmt :: ModelCredential 'Payment k,
+    _modelAddress_stk :: ModelCredential 'Staking k
   }
   deriving (Generic)
+
+modelAddress_pmt :: Lens' (ModelAddress k) (ModelCredential 'Payment k)
+modelAddress_pmt a2fb s = (\b -> s {_modelAddress_pmt = b}) <$> a2fb (_modelAddress_pmt s)
+{-# INLINE modelAddress_pmt #-}
+
+modelAddress_stk :: Lens' (ModelAddress k) (ModelCredential 'Staking k)
+modelAddress_stk a2fb s = (\b -> s {_modelAddress_stk = b}) <$> a2fb (_modelAddress_stk s)
+{-# INLINE modelAddress_stk #-}
 
 deriving instance Eq (ModelAddress k)
 
@@ -63,6 +72,26 @@ class HasKeyRole' (a :: KeyRole -> k -> Type) where
 data ModelCredential (r :: KeyRole) (k :: TyScriptFeature) where
   ModelKeyHashObj :: String -> ModelCredential r k
   ModelScriptHashObj :: ModelPlutusScript -> ModelCredential r ('TyScriptFeature x 'True)
+
+_ModelKeyHashObj :: Prism' (ModelCredential r k) String
+_ModelKeyHashObj = prism ModelKeyHashObj $ \case
+  ModelKeyHashObj x -> Right x
+  x -> Left x
+{-# INLINE _ModelKeyHashObj #-}
+
+_ModelScriptHashObj :: Prism (ModelCredential r k) (ModelCredential r' ('TyScriptFeature k' 'True)) ModelPlutusScript ModelPlutusScript
+_ModelScriptHashObj = prism ModelScriptHashObj $ \case
+  ModelScriptHashObj x -> Right x
+  ModelKeyHashObj x -> Left (ModelKeyHashObj x)
+{-# INLINE _ModelScriptHashObj #-}
+
+-- slightly reduced strength _ModelScriptHashObj because gadt's are not very
+-- strong.
+traverseModelScriptHashObj :: Traversal' (ModelCredential r k) ModelPlutusScript
+traverseModelScriptHashObj f = \case
+  ModelScriptHashObj x -> ModelScriptHashObj <$> f x
+  ModelKeyHashObj x -> pure $ ModelKeyHashObj x
+{-# INLINE traverseModelScriptHashObj #-}
 
 deriving instance Eq (ModelCredential r k)
 
@@ -119,6 +148,7 @@ deriving instance Show (ModelScript k)
 data ModelPlutusScript
   = ModelPlutusScript_AlwaysSucceeds Natural
   | ModelPlutusScript_AlwaysFails Natural
+  | ModelPlutusScript_Parity Integer [Bool]
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData ModelPlutusScript
@@ -172,3 +202,4 @@ elaborateModelScript ::
 elaborateModelScript = \case
   ModelPlutusScript_AlwaysSucceeds n -> Alonzo.alwaysSucceeds n
   ModelPlutusScript_AlwaysFails n -> Alonzo.alwaysFails n
+  ModelPlutusScript_Parity n ps -> Alonzo.sumEvenArgs n ps

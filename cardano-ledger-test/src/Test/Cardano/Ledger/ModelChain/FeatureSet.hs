@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -32,10 +31,15 @@ data TyScriptFeature = TyScriptFeature
     _tyScript_plutus :: !Bool
   }
 
+type family PlutusScriptFeature (a :: TyScriptFeature) where
+  PlutusScriptFeature ('TyScriptFeature _ x) = x
+
 data ScriptFeatureTag (s :: TyScriptFeature) where
   ScriptFeatureTag_None :: ScriptFeatureTag ('TyScriptFeature 'False 'False)
   ScriptFeatureTag_Simple :: ScriptFeatureTag ('TyScriptFeature 'True 'False)
   ScriptFeatureTag_PlutusV1 :: ScriptFeatureTag ('TyScriptFeature 'True 'True)
+
+deriving instance Show (ScriptFeatureTag s)
 
 class KnownScriptFeature (s :: TyScriptFeature) where reifyScriptFeature :: proxy s -> ScriptFeatureTag s
 
@@ -70,6 +74,11 @@ deriving instance (Eq a, Eq b) => Eq (IfSupportsPlutus a b k)
 
 deriving instance (Ord a, Ord b) => Ord (IfSupportsPlutus a b k)
 
+fromSupportsPlutus :: (a -> c) -> (b -> c) -> IfSupportsPlutus a b k -> c
+fromSupportsPlutus f g = \case
+  NoPlutusSupport x -> f x
+  SupportsPlutus y -> g y
+
 ifSupportsPlutus ::
   KnownScriptFeature s =>
   proxy s ->
@@ -96,6 +105,16 @@ traverseSupportsPlutus ::
 traverseSupportsPlutus f = \case
   NoPlutusSupport x -> pure $ NoPlutusSupport x
   SupportsPlutus x -> SupportsPlutus <$> f x
+
+bitraverseSupportsPlutus ::
+  Applicative m =>
+  (a -> m c) ->
+  (b -> m d) ->
+  IfSupportsPlutus a b s ->
+  m (IfSupportsPlutus c d s)
+bitraverseSupportsPlutus f g = \case
+  NoPlutusSupport x -> NoPlutusSupport <$> f x
+  SupportsPlutus y -> SupportsPlutus <$> g y
 
 reifySupportsPlutus ::
   KnownScriptFeature s => proxy s -> IfSupportsPlutus () () s
@@ -184,9 +203,13 @@ data FeatureSet = FeatureSet TyValueExpected TyScriptFeature
 data FeatureTag (tag :: FeatureSet) where
   FeatureTag :: ValueFeatureTag v -> ScriptFeatureTag s -> FeatureTag ('FeatureSet v s)
 
+deriving instance Show (FeatureTag tag)
+
 data ValueFeatureTag (v :: TyValueExpected) where
   ValueFeatureTag_AdaOnly :: ValueFeatureTag 'ExpectAdaOnly
   ValueFeatureTag_AnyOutput :: ValueFeatureTag 'ExpectAnyOutput
+
+deriving instance Show (ValueFeatureTag s)
 
 type family MaxValueFeature (a :: TyValueExpected) (b :: TyValueExpected) :: TyValueExpected where
   MaxValueFeature 'ExpectAdaOnly b = b
@@ -202,6 +225,63 @@ class RequiredFeatures (f :: FeatureSet -> Type) where
     FeatureTag b ->
     f a ->
     Maybe (f b)
+
+data GPartialOrdering (a :: k) (b :: k) where
+  GIncomparable :: GPartialOrdering a b
+  GPartialLT :: GPartialOrdering a b
+  GPartialEQ :: GPartialOrdering a a
+  GPartialGT :: GPartialOrdering a b
+
+compareScriptFeatureTag :: ScriptFeatureTag a -> ScriptFeatureTag b -> GPartialOrdering a b
+compareScriptFeatureTag = \case
+  ScriptFeatureTag_None -> \case
+    ScriptFeatureTag_None -> GPartialEQ
+    ScriptFeatureTag_Simple -> GPartialLT
+    ScriptFeatureTag_PlutusV1 -> GPartialLT
+  ScriptFeatureTag_Simple -> \case
+    ScriptFeatureTag_None -> GPartialLT
+    ScriptFeatureTag_Simple -> GPartialEQ
+    ScriptFeatureTag_PlutusV1 -> GPartialGT
+  ScriptFeatureTag_PlutusV1 -> \case
+    ScriptFeatureTag_None -> GPartialGT
+    ScriptFeatureTag_Simple -> GPartialGT
+    ScriptFeatureTag_PlutusV1 -> GPartialEQ
+
+compareValueFeatureTag :: ValueFeatureTag a -> ValueFeatureTag b -> GPartialOrdering a b
+compareValueFeatureTag = \case
+  ValueFeatureTag_AdaOnly -> \case
+    ValueFeatureTag_AdaOnly -> GPartialEQ
+    ValueFeatureTag_AnyOutput -> GPartialLT
+  ValueFeatureTag_AnyOutput -> \case
+    ValueFeatureTag_AdaOnly -> GPartialGT
+    ValueFeatureTag_AnyOutput -> GPartialEQ
+
+compareFeatureTag :: FeatureTag a -> FeatureTag b -> GPartialOrdering a b
+compareFeatureTag (FeatureTag v s) (FeatureTag v' s') =
+  combineGPartialOrdering
+    (compareValueFeatureTag v v')
+    (compareScriptFeatureTag s s')
+  where
+    combineGPartialOrdering ::
+      GPartialOrdering v v' -> GPartialOrdering s s' -> GPartialOrdering ('FeatureSet v s) ('FeatureSet v' s')
+    combineGPartialOrdering GIncomparable _ = GIncomparable
+    combineGPartialOrdering _ GIncomparable = GIncomparable
+    combineGPartialOrdering GPartialEQ GPartialEQ = GPartialEQ
+    combineGPartialOrdering GPartialEQ GPartialGT = GPartialGT
+    combineGPartialOrdering GPartialEQ GPartialLT = GPartialLT
+    combineGPartialOrdering GPartialGT GPartialEQ = GPartialGT
+    combineGPartialOrdering GPartialGT GPartialGT = GPartialGT
+    combineGPartialOrdering GPartialGT GPartialLT = GIncomparable
+    combineGPartialOrdering GPartialLT GPartialEQ = GPartialLT
+    combineGPartialOrdering GPartialLT GPartialGT = GIncomparable
+    combineGPartialOrdering GPartialLT GPartialLT = GPartialLT
+
+preceedsModelEra :: FeatureTag a -> FeatureTag b -> Bool
+preceedsModelEra x y = case compareFeatureTag x y of
+  GPartialLT -> True
+  GPartialEQ -> True
+  GPartialGT -> False
+  GIncomparable -> False
 
 class KnownValueFeature (v :: TyValueExpected) where reifyValueFeature :: proxy v -> ValueFeatureTag v
 
@@ -238,7 +318,6 @@ instance
   KnownRequiredFeatures ('FeatureSet v s)
 
 instance RequiredFeatures FeatureTag where
-  -- minFeatures = id
   filterFeatures (FeatureTag v0 s0) (FeatureTag v1 s1) = FeatureTag <$> v <*> s
     where
       v = case (v0, v1) of

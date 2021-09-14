@@ -19,9 +19,6 @@ import Control.State.Transition.Extended
 import Data.Default.Class
 import Data.Functor.Identity
 import Data.List (nub, (\\))
-import qualified Data.Map as Map
-import Data.Proxy
-import qualified Data.Set as Set
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Shelley.Spec.Ledger.API.Genesis
@@ -34,7 +31,6 @@ import Test.Cardano.Ledger.Elaborators
 import Test.Cardano.Ledger.ModelChain
 import Test.Cardano.Ledger.ModelChain.FeatureSet
 import Test.Cardano.Ledger.ModelChain.Script
-import Test.Cardano.Ledger.ModelChain.Value
 import Test.Shelley.Spec.Ledger.Utils (testGlobals)
 import Test.Tasty.QuickCheck
 
@@ -93,7 +89,9 @@ testChainModelInteractionWith ::
     ElaborateEraModel era,
     Default (AdditionalGenesisConfig era),
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    Show (Core.Tx era),
+    Show (Core.Script era)
   ) =>
   proxy era ->
   (NewEpochState era -> EraElaboratorState era -> prop) ->
@@ -104,7 +102,10 @@ testChainModelInteractionWith proxy p a = filterChainModelProp proxy $ \b ->
   let (result, (nes, ees)) = chainModelInteractionWith proxy a b
    in case result of
         Right () -> property $! p nes ees
-        Left bad -> counterexample (show bad) False
+        Left bad ->
+          counterexample (show $ fmap _tciKey $ _eesKeys ees) $
+            counterexample (show bad) $
+              False
 
 compareLists :: forall a. (Show a, Eq a) => [a] -> [a] -> Property
 compareLists a b = case nub a \\ nub b of
@@ -119,7 +120,8 @@ testChainModelInteractionRejection ::
     Default (AdditionalGenesisConfig era),
     Eq (PredicateFailure (Core.EraRule "LEDGER" era)),
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    Show (Core.Tx era)
   ) =>
   proxy era ->
   ModelPredicateFailure (EraFeatureSet era) ->
@@ -136,7 +138,7 @@ testChainModelInteractionRejection proxy e a = filterChainModelProp proxy $ \b -
                 Right elaboratedError -> case (e', elaboratedError) of
                   (bad@(ElaborateBlockError_Fee {}), _) -> counterexample (show bad) False
                   (bad@(ElaborateBlockError_TxValue {}), _) -> counterexample (show bad) False
-                  (ElaborateBlockError_ApplyTx (ApplyTxError te), ApplyBlockTransitionError_Tx (ApplyTxError te')) ->
+                  (ElaborateBlockError_ApplyTx _ (ApplyTxError te), ApplyBlockTransitionError_Tx (ApplyTxError te')) ->
                     compareLists te te'
         -- fallthrough if/when more error types are added
         -- (te, te') -> te === te'
@@ -149,7 +151,9 @@ testChainModelInteraction ::
   ( Show (PredicateFailure (Core.EraRule "LEDGER" era)),
     ElaborateEraModel era,
     Default (AdditionalGenesisConfig era),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    Show (Core.Tx era),
+    Show (Core.Script era)
   ) =>
   proxy era ->
   [(ModelUTxOId, ModelAddress (EraScriptFeature era), Coin)] ->
@@ -172,20 +176,3 @@ filterChainModelProp proxy f xs =
   case traverse (filterFeatures (eraFeatureSet proxy)) xs of
     Nothing -> cover 0 True "feature absent in era" True -- todo, is there a nice way to report these?
     Just xs' -> f xs'
-
--- | helper to produce a "blank" ModelTx with most fields set to a reasonable
--- "default"
-modelTx :: forall (era :: FeatureSet). KnownRequiredFeatures era => ModelTx era
-modelTx =
-  ModelTx
-    { _mtxInputs = Set.empty,
-      _mtxOutputs = [],
-      _mtxFee = ModelValue $ ModelValue_Inject $ Coin 0,
-      _mtxDCert = [],
-      _mtxWdrl = Map.empty,
-      _mtxMint = case reifyRequiredFeatures (Proxy :: Proxy era) of
-        FeatureTag v _ -> case v of
-          ValueFeatureTag_AdaOnly -> NoMintSupport ()
-          ValueFeatureTag_AnyOutput -> SupportsMint $ ModelValue $ ModelValue_Inject $ Coin 0,
-      _mtxCollateral = mapSupportsPlutus (const $ Set.empty) $ reifySupportsPlutus (Proxy :: Proxy (ScriptFeature era))
-    }

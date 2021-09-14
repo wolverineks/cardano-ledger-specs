@@ -27,6 +27,8 @@
 
 module Test.Cardano.Ledger.ModelChain where
 
+import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
+import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Crypto as C
@@ -41,12 +43,15 @@ import Control.DeepSeq
 import Control.Lens
 import Control.Monad
 import qualified Control.Monad.State.Strict as State
+import Data.Bifunctor (first)
+import Data.Bool (bool)
 import Data.Foldable (fold)
 import Data.Group
 import Data.Kind (Type)
 import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Strict as Map
+import Data.Maybe (mapMaybe)
 import Data.Proxy
 import Data.Semigroup (Sum (..))
 import Data.Set (Set)
@@ -106,18 +111,22 @@ filterModelValueVars (ModelValue_MA ys) = do
   Refl <- reifyExpectAnyOutput (reifyValueFeature (Proxy @d))
   Refl <- reifyExpectAnyOutput (reifyValueFeature (Proxy @(ValueFeature c)))
 
-  let f :: ModelScript (ScriptFeature a) -> Maybe (ModelScript (ScriptFeature c))
-      f = \case
-        ModelScript_Timelock t -> case reifyScriptFeature (Proxy @(ScriptFeature c)) of
-          ScriptFeatureTag_None -> Nothing
-          ScriptFeatureTag_Simple -> Just $ ModelScript_Timelock t
-          ScriptFeatureTag_PlutusV1 -> Just $ ModelScript_Timelock t
-        ModelScript_PlutusV1 t -> case reifyScriptFeature (Proxy @(ScriptFeature c)) of
-          ScriptFeatureTag_None -> Nothing
-          ScriptFeatureTag_Simple -> Nothing
-          ScriptFeatureTag_PlutusV1 -> Just $ ModelScript_PlutusV1 t
+  ModelValue_MA <$> _1 filterModelScript ys
 
-  ModelValue_MA <$> _1 f ys
+filterModelScript ::
+  forall b a.
+  KnownScriptFeature b =>
+  ModelScript a ->
+  Maybe (ModelScript b)
+filterModelScript = \case
+  ModelScript_Timelock t -> case reifyScriptFeature (Proxy @b) of
+    ScriptFeatureTag_None -> Nothing
+    ScriptFeatureTag_Simple -> Just $ ModelScript_Timelock t
+    ScriptFeatureTag_PlutusV1 -> Just $ ModelScript_Timelock t
+  ModelScript_PlutusV1 t -> case reifyScriptFeature (Proxy @b) of
+    ScriptFeatureTag_None -> Nothing
+    ScriptFeatureTag_Simple -> Nothing
+    ScriptFeatureTag_PlutusV1 -> Just $ ModelScript_PlutusV1 t
 
 -- change the "expected return type" of a ModelValue
 filterModelValue ::
@@ -133,25 +142,30 @@ instance KnownValueFeature v => RequiredFeatures (ModelValue v) where
 
 instance RequiredFeatures ModelTx where
   filterFeatures :: forall a b. KnownRequiredFeatures a => FeatureTag b -> ModelTx a -> Maybe (ModelTx b)
-  filterFeatures tag (ModelTx ins outs fee dcert wdrl g cins) =
+  filterFeatures tag@(FeatureTag _ sf) (ModelTx ins outs fee dcert wdrl g cins valid rdmr wits) =
     ModelTx ins
       <$> (traverse . traverse) (filterFeatures tag) outs
       <*> (filterFeatures tag fee)
       <*> traverse (filterFeatures tag) dcert
       <*> fmap Map.fromList (for (Map.toList wdrl) $ \(k, v) -> (,) <$> filterModelCredential tag k <*> filterFeatures tag v)
-      <*> case g of
-        NoMintSupport () -> case tag of
-          FeatureTag ValueFeatureTag_AdaOnly _ -> pure $ NoMintSupport ()
-          FeatureTag ValueFeatureTag_AnyOutput _ -> pure (SupportsMint . ModelValue . ModelValue_Inject $ Coin 0)
-        SupportsMint g' -> case tag of
-          FeatureTag ValueFeatureTag_AdaOnly _ | g' == ModelValue (ModelValue_Inject $ Val.zero) -> pure $ NoMintSupport ()
-          FeatureTag ValueFeatureTag_AdaOnly _ -> Nothing
-          FeatureTag ValueFeatureTag_AnyOutput _ -> SupportsMint <$> filterFeatures tag g'
-      <*> let setNotEmpty :: Set x -> Maybe (Set x)
-              setNotEmpty x
-                | Set.null x = Nothing
-                | otherwise = Just x
-           in (fmap (mapSupportsPlutus fold) $ filterSupportsPlutus tag $ mapSupportsPlutus setNotEmpty cins)
+      <*> ( case g of
+              NoMintSupport () -> case tag of
+                FeatureTag ValueFeatureTag_AdaOnly _ -> pure $ NoMintSupport ()
+                FeatureTag ValueFeatureTag_AnyOutput _ -> pure (SupportsMint . ModelValue . ModelValue_Inject $ Coin 0)
+              SupportsMint g' -> case tag of
+                FeatureTag ValueFeatureTag_AdaOnly _ | g' == ModelValue (ModelValue_Inject $ Val.zero) -> pure $ NoMintSupport ()
+                FeatureTag ValueFeatureTag_AdaOnly _ -> Nothing
+                FeatureTag ValueFeatureTag_AnyOutput _ -> SupportsMint <$> filterFeatures tag g'
+          )
+      <*> ( let setNotEmpty :: Set x -> Maybe (Set x)
+                setNotEmpty x
+                  | Set.null x = Nothing
+                  | otherwise = Just x
+             in (fmap (mapSupportsPlutus fold) $ filterSupportsPlutus tag $ mapSupportsPlutus setNotEmpty cins)
+          )
+      <*> filterModelValidity sf valid
+      <*> fmap Map.fromList ((traverse . _1) (filterFeatures tag) $ Map.toList rdmr)
+      <*> pure wits
 
 filterModelAddress ::
   FeatureTag b ->
@@ -165,13 +179,23 @@ filterModelAddress tag (ModelAddress pmt stk) =
 filterModelCredential ::
   FeatureTag b ->
   ModelCredential r a ->
-  Maybe (ModelCredential r (ScriptFeature b))
+  Maybe (ModelCredential r' (ScriptFeature b))
 filterModelCredential (FeatureTag _ s) = \case
   ModelKeyHashObj a -> Just (ModelKeyHashObj a)
   ModelScriptHashObj a -> case s of
     ScriptFeatureTag_None -> Nothing
     ScriptFeatureTag_Simple -> Nothing
     ScriptFeatureTag_PlutusV1 -> Just (ModelScriptHashObj a)
+
+filterModelValidity ::
+  forall a b.
+  ScriptFeatureTag b ->
+  IfSupportsPlutus () IsValid a ->
+  Maybe (IfSupportsPlutus () IsValid b)
+filterModelValidity sf = hasKnownScriptFeature sf $ \case
+  NoPlutusSupport () -> Just $ ifSupportsPlutus sf () (IsValid True)
+  SupportsPlutus v@(IsValid True) -> Just $ ifSupportsPlutus sf () v
+  SupportsPlutus v@(IsValid False) -> bitraverseSupportsPlutus id id $ ifSupportsPlutus sf Nothing (Just v)
 
 instance RequiredFeatures ModelBlock where
   filterFeatures tag (ModelBlock slotNo txns) =
@@ -227,6 +251,15 @@ data ModelTxOut era = ModelTxOut
 
 instance NFData (ModelTxOut era)
 
+-- | Convenience function to create a spendable ModelTxOut
+modelTxOut :: forall era. KnownScriptFeature (ScriptFeature era) => ModelAddress (ScriptFeature era) -> ModelValue (ValueFeature era) era -> ModelTxOut era
+modelTxOut a v = ModelTxOut a v dh
+  where
+    dh = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () $
+      case _modelAddress_pmt a of
+        ModelKeyHashObj _ -> Nothing
+        ModelScriptHashObj _ -> Just $ PlutusTx.I 42
+
 modelTxOut_address :: forall era. Lens' (ModelTxOut era) (ModelAddress (ScriptFeature era))
 modelTxOut_address = lens _mtxo_address (\s b -> s {_mtxo_address = b})
 {-# INLINE modelTxOut_address #-}
@@ -245,6 +278,30 @@ newtype ModelUTxOId = ModelUTxOId {unModelUTxOId :: Integer}
 instance Show ModelUTxOId where
   showsPrec n (ModelUTxOId x) = showsPrec n x
 
+data ModelScriptPurpose era where
+  ModelScriptPurpose_Minting :: ModelScript (ScriptFeature era) -> ModelScriptPurpose era
+  ModelScriptPurpose_Spending :: ModelUTxOId -> ModelScriptPurpose era
+  ModelScriptPurpose_Rewarding :: ModelCredential 'Staking (ScriptFeature era) -> ModelScriptPurpose era
+  ModelScriptPurpose_Certifying :: (ModelDCert era) -> ModelScriptPurpose era
+
+deriving instance Eq (ModelScriptPurpose era)
+
+deriving instance Ord (ModelScriptPurpose era)
+
+deriving instance Show (ModelScriptPurpose era)
+
+instance NFData (ModelScriptPurpose era) where
+  rnf = rwhnf
+
+instance RequiredFeatures ModelScriptPurpose where
+  filterFeatures tag@(FeatureTag _ sf) = \case
+    ModelScriptPurpose_Minting policy ->
+      ModelScriptPurpose_Minting
+        <$> hasKnownScriptFeature sf (filterModelScript policy)
+    ModelScriptPurpose_Spending uid -> ModelScriptPurpose_Spending <$> pure uid
+    ModelScriptPurpose_Rewarding ra -> ModelScriptPurpose_Rewarding <$> filterModelCredential tag ra
+    ModelScriptPurpose_Certifying mdc -> ModelScriptPurpose_Certifying <$> filterFeatures tag mdc
+
 data ModelTx (era :: FeatureSet) = ModelTx
   { _mtxInputs :: !(Set ModelUTxOId),
     _mtxOutputs :: ![(ModelUTxOId, ModelTxOut era)],
@@ -252,7 +309,10 @@ data ModelTx (era :: FeatureSet) = ModelTx
     _mtxDCert :: ![ModelDCert era],
     _mtxWdrl :: !(Map.Map (ModelCredential 'Staking (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era)),
     _mtxMint :: !(IfSupportsMint () (ModelValue (ValueFeature era) era) (ValueFeature era)),
-    _mtxCollateral :: !(IfSupportsPlutus () (Set ModelUTxOId) (ScriptFeature era))
+    _mtxCollateral :: !(IfSupportsPlutus () (Set ModelUTxOId) (ScriptFeature era)),
+    _mtxValidity :: !(IfSupportsPlutus () IsValid (ScriptFeature era)),
+    _mtxRedeemers :: !(Map.Map (ModelScriptPurpose era) (PlutusTx.Data, ExUnits)),
+    _mtxWitnessSigs :: !(Set (ModelCredential 'Witness ('TyScriptFeature 'False 'False)))
   }
   deriving (Show, Generic)
 
@@ -313,6 +373,98 @@ modelTx_collateral :: Lens' (ModelTx era) (IfSupportsPlutus () (Set ModelUTxOId)
 modelTx_collateral = lens _mtxCollateral (\s b -> s {_mtxCollateral = b})
 {-# INLINE modelTx_collateral #-}
 
+modelTx_validity :: Lens' (ModelTx era) (IfSupportsPlutus () IsValid (ScriptFeature era))
+modelTx_validity = lens _mtxValidity (\s b -> s {_mtxValidity = b})
+{-# INLINE modelTx_validity #-}
+
+modelTx_redeemers :: Lens' (ModelTx era) (Map.Map (ModelScriptPurpose era) (PlutusTx.Data, ExUnits))
+modelTx_redeemers = lens _mtxRedeemers (\s b -> s {_mtxRedeemers = b})
+{-# INLINE modelTx_redeemers #-}
+
+modelTx_witnessSigs :: Lens' (ModelTx era) (Set (ModelCredential 'Witness ('TyScriptFeature 'False 'False)))
+modelTx_witnessSigs = lens _mtxWitnessSigs (\s b -> s {_mtxWitnessSigs = b})
+{-# INLINE modelTx_witnessSigs #-}
+
+-- | helper to produce a "blank" ModelTx with most fields set to a reasonable
+-- "default"
+modelTx :: forall (era :: FeatureSet). KnownRequiredFeatures era => ModelTx era
+modelTx =
+  ModelTx
+    { _mtxInputs = Set.empty,
+      _mtxOutputs = [],
+      _mtxFee = ModelValue $ ModelValue_Inject $ Coin 0,
+      _mtxDCert = [],
+      _mtxWdrl = Map.empty,
+      _mtxMint = case reifyRequiredFeatures (Proxy :: Proxy era) of
+        FeatureTag v _ -> case v of
+          ValueFeatureTag_AdaOnly -> NoMintSupport ()
+          ValueFeatureTag_AnyOutput -> SupportsMint $ ModelValue $ ModelValue_Inject $ Coin 0,
+      _mtxCollateral = mapSupportsPlutus (const Set.empty) $ reifySupportsPlutus (Proxy :: Proxy (ScriptFeature era)),
+      _mtxValidity = mapSupportsPlutus (const $ IsValid True) $ reifySupportsPlutus (Proxy :: Proxy (ScriptFeature era)),
+      _mtxRedeemers = Map.empty,
+      _mtxWitnessSigs = Set.empty
+    }
+
+-- TODO: there's some extra degrees of freedom hidden in this function, they
+-- should be exposed
+-- - redeemer value/exunits
+-- - how timelocks are signed (which n of m)
+witnessModelTx ::
+  forall (era :: FeatureSet). ModelTx era -> ModelLedger era -> ModelTx era
+witnessModelTx mtx ml =
+  let mkRdmr :: ModelScript (ScriptFeature era) -> ModelScriptPurpose era -> (PlutusTx.Data, ExUnits)
+      mkRdmr _ _ = (PlutusTx.I 2, ExUnits 1 1)
+
+      lookupOutput :: ModelUTxOId -> Maybe (ModelUTxOId, ModelCredential 'Payment (ScriptFeature era))
+      lookupOutput ui = (,) ui <$> preview (modelLedger_utxos . at ui . _Just . modelTxOut_address @era . modelAddress_pmt) ml
+
+      matchDCert :: ModelDCert era -> Maybe (ModelDCert era, ModelCredential 'Staking (ScriptFeature era))
+      matchDCert cert = case cert of
+        ModelDelegate (ModelDelegation cred _) -> Just (cert, cred)
+        ModelDeRegisterStake cred -> Just (cert, cred)
+        _ -> Nothing
+
+      matchPoolCert :: ModelDCert era -> [ModelCredential 'Witness ('TyScriptFeature 'False 'False)]
+      matchPoolCert = \case
+        ModelRegisterPool mpp -> [coerceKeyRole' $ unModelPoolId $ _mppId mpp] <> fmap coerceKeyRole' (_mppOwners mpp)
+        _ -> []
+
+      witnessMint :: ModelValueVars era (ValueFeature era) -> (Set (ModelCredential 'Witness ('TyScriptFeature 'False 'False)), Map.Map (ModelScriptPurpose era) (PlutusTx.Data, ExUnits))
+      witnessMint = \case
+        ModelValue_Reward _ -> mempty
+        ModelValue_MA (modelPolicy, _) -> case modelPolicy of
+          ModelScript_Timelock tl -> foldMap (\wit -> (Set.singleton wit, Map.empty)) (modelScriptNeededSigs tl)
+          ModelScript_PlutusV1 _s1 ->
+            let sp = ModelScriptPurpose_Minting modelPolicy
+             in (Set.empty, Map.singleton sp (mkRdmr modelPolicy sp))
+
+      witnessCredential ::
+        ModelScriptPurpose era ->
+        ModelCredential k (ScriptFeature era) ->
+        ( Set (ModelCredential 'Witness ('TyScriptFeature 'False 'False)),
+          Map.Map (ModelScriptPurpose era) (PlutusTx.Data, ExUnits)
+        )
+      witnessCredential msp = \case
+        ModelKeyHashObj k -> (Set.singleton (ModelKeyHashObj k), Map.empty)
+        ModelScriptHashObj s -> (Set.empty, Map.singleton msp (mkRdmr (ModelScript_PlutusV1 s) msp))
+
+      witnessSigs :: Set (ModelCredential 'Witness ('TyScriptFeature 'False 'False))
+      redeemers :: Map.Map (ModelScriptPurpose era) (PlutusTx.Data, ExUnits)
+      (witnessSigs, redeemers) =
+        foldMap (uncurry witnessCredential . first ModelScriptPurpose_Spending) (mapMaybe lookupOutput $ Set.toList $ _mtxInputs mtx)
+          <> foldMap (uncurry witnessCredential . first ModelScriptPurpose_Certifying) (mapMaybe matchDCert $ _mtxDCert mtx)
+          <> foldMap (\c -> (Set.singleton c, Map.empty)) (matchPoolCert =<< _mtxDCert mtx)
+          <> foldMap (uncurry witnessCredential . (ModelScriptPurpose_Rewarding &&& id)) (Map.keys $ _mtxWdrl mtx)
+          <> fromSupportsMint mempty (foldMap witnessMint . unModelValue) (_mtxMint mtx)
+          <> fromSupportsPlutus
+            mempty
+            (foldMap (uncurry witnessCredential . first ModelScriptPurpose_Spending) . mapMaybe lookupOutput . Set.toList)
+            (_mtxCollateral mtx)
+   in mtx
+        { _mtxWitnessSigs = witnessSigs,
+          _mtxRedeemers = redeemers
+        }
+
 data ModelBlock era = ModelBlock
   { _modelBlock_slot :: SlotNo,
     _modelBlock_txSeq :: [ModelTx era]
@@ -337,7 +489,7 @@ modelBlock_txSeq :: Lens' (ModelBlock era) [ModelTx era]
 modelBlock_txSeq = lens _modelBlock_txSeq (\s b -> s {_modelBlock_txSeq = b})
 {-# INLINE modelBlock_txSeq #-}
 
-newtype ModelPoolId = ModelPoolId {unModelPoolId :: String}
+newtype ModelPoolId = ModelPoolId {unModelPoolId :: ModelCredential 'StakePool ('TyScriptFeature 'False 'False)}
   deriving (Eq, Ord, GHC.IsString, NFData)
 
 instance Show ModelPoolId where
@@ -396,6 +548,14 @@ data ModelDelegation era = ModelDelegation
   deriving (Generic, Eq, Ord)
   deriving (Show) via Quiet (ModelDelegation era)
 
+modelDelegation_delegator :: Lens' (ModelDelegation era) (ModelCredential 'Staking (ScriptFeature era))
+modelDelegation_delegator a2fb s = (\b -> s {_mdDelegator = b}) <$> a2fb (_mdDelegator s)
+{-# INLINE modelDelegation_delegator #-}
+
+modelDelegation_delegatee :: Lens' (ModelDelegation era) ModelPoolId
+modelDelegation_delegatee a2fb s = (\b -> s {_mdDelegatee = b}) <$> a2fb (_mdDelegatee s)
+{-# INLINE modelDelegation_delegatee #-}
+
 instance NFData (ModelDelegation era)
 
 instance RequiredFeatures ModelDelegation where
@@ -406,6 +566,7 @@ instance RequiredFeatures ModelDelegation where
 
 data ModelPoolParams era = ModelPoolParams
   { _mppId :: !ModelPoolId,
+    _mppVrm :: !(ModelCredential 'StakePool ('TyScriptFeature 'False 'False)),
     _mppPledge :: !Coin,
     _mppCost :: !Coin,
     _mppMargin :: !UnitInterval,
@@ -417,8 +578,8 @@ data ModelPoolParams era = ModelPoolParams
 instance NFData (ModelPoolParams era)
 
 instance RequiredFeatures ModelPoolParams where
-  filterFeatures tag (ModelPoolParams poolId pledge cost margin rAcnt owners) =
-    ModelPoolParams poolId pledge cost margin
+  filterFeatures tag (ModelPoolParams poolId poolVrf pledge cost margin rAcnt owners) =
+    ModelPoolParams poolId poolVrf pledge cost margin
       <$> filterModelCredential tag rAcnt
       <*> pure owners
 
@@ -429,7 +590,7 @@ data ModelDCert era
   | ModelDelegate (ModelDelegation era)
   | ModelRegisterPool (ModelPoolParams era)
   | ModelRetirePool ModelPoolId EpochNo
-  deriving (Show, Generic)
+  deriving (Show, Generic, Eq, Ord)
 
 instance NFData (ModelDCert era)
 
@@ -518,26 +679,38 @@ modelSnapshot_pools a2fb s = (\b -> s {_modelSnapshot_pools = b}) <$> a2fb (_mod
 {-# INLINE modelSnapshot_pools #-}
 
 data ModelUtxoMap era = ModelUtxoMap
-  { _modelUtxoMap_utxos :: (Map.Map ModelUTxOId (Coin, ModelTxOut era)),
-    _modelUtxoMap_stake :: GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin
+  { _modelUtxoMap_utxos :: !(Map.Map ModelUTxOId (Coin, ModelTxOut era)),
+    _modelUtxoMap_stake :: !(GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin),
+    _modelUtxoMap_collateralUtxos :: !(Set ModelUTxOId)
   }
   deriving (Eq, Show, Generic)
+
+instance Semigroup (ModelUtxoMap era) where
+  ModelUtxoMap utxos stake collateral <> ModelUtxoMap utxos' stake' collateral' =
+    ModelUtxoMap
+      (Map.unionWith (\x y -> if x == y then x else error $ unwords ["unmergable ModelUtxoMap:", show x, "/=", show y]) utxos utxos')
+      (stake <> stake')
+      (Set.union collateral collateral')
+
+instance Monoid (ModelUtxoMap era) where
+  mempty = ModelUtxoMap Map.empty mempty Set.empty
 
 mkModelUtxoMap ::
   forall era.
   KnownScriptFeature (ScriptFeature era) =>
   [(ModelUTxOId, ModelAddress (ScriptFeature era), Coin)] ->
   ModelUtxoMap era
-mkModelUtxoMap = (.) (uncurry ModelUtxoMap) $
+mkModelUtxoMap =
   foldMap $ \(ui, ma, val) ->
-    ( Map.singleton ui (val, ModelTxOut ma (modelValueInject val) dh),
-      grpMapSingleton (_modelAddres_stk ma) val
-    )
+    ModelUtxoMap
+      (Map.singleton ui (val, ModelTxOut ma (modelValueInject val) dh))
+      (grpMapSingleton (_modelAddress_stk ma) val)
+      (bool Set.empty (Set.singleton ui) $ has (modelAddress_pmt . _ModelKeyHashObj) ma)
   where
     dh = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () Nothing
 
 getStake :: Map.Map ModelUTxOId (Coin, ModelTxOut era) -> GrpMap (ModelCredential 'Staking (ScriptFeature era)) Coin
-getStake = foldMap (\(val, txo) -> grpMapSingleton (_modelAddres_stk $ _mtxo_address txo) val)
+getStake = foldMap (\(val, txo) -> grpMapSingleton (_modelAddress_stk $ _mtxo_address txo) val)
 
 getModelValueCoin :: ModelValue a c -> Coin
 getModelValueCoin = foldMap Val.coin . evalModelValueSimple . unModelValue
@@ -550,9 +723,13 @@ spendModelUTxOs ::
 spendModelUTxOs ins outs xs =
   let ins' = Map.restrictKeys (_modelUtxoMap_utxos xs) ins
       outs' = Map.fromList $ (fmap . fmap) (getModelValueCoin . _mtxo_value &&& id) outs
+      newCollateral = foldMap (\(ui, txo) -> bool Set.empty (Set.singleton ui) $ has (modelTxOut_address . modelAddress_pmt . _ModelKeyHashObj) txo) outs
    in ModelUtxoMap
         { _modelUtxoMap_utxos = Map.withoutKeys (_modelUtxoMap_utxos xs `Map.union` outs') ins,
-          _modelUtxoMap_stake = _modelUtxoMap_stake xs <> getStake outs' ~~ getStake ins'
+          _modelUtxoMap_stake = _modelUtxoMap_stake xs <> getStake outs' ~~ getStake ins',
+          _modelUtxoMap_collateralUtxos =
+            Set.difference (_modelUtxoMap_collateralUtxos xs) ins
+              `Set.union` newCollateral
         }
 
 instance NFData (ModelUtxoMap era)
@@ -572,10 +749,15 @@ instance At (ModelUtxoMap era) where
           let val = foldMap (getModelValueCoin . _mtxo_value) b
            in ModelUtxoMap
                 { _modelUtxoMap_utxos = set (at k) (fmap ((,) val) b) (_modelUtxoMap_utxos s),
+                  _modelUtxoMap_collateralUtxos =
+                    set
+                      (at k)
+                      (() <$ preview (_Just . modelTxOut_address . modelAddress_pmt . _ModelKeyHashObj) b)
+                      (_modelUtxoMap_collateralUtxos s),
                   _modelUtxoMap_stake =
                     _modelUtxoMap_stake s
-                      <> foldMap (\(val', ui) -> grpMapSingleton (_modelAddres_stk $ _mtxo_address ui) (invert val')) a
-                      <> foldMap (\ui -> grpMapSingleton (_modelAddres_stk $ _mtxo_address ui) val) b
+                      <> foldMap (\(val', ui) -> grpMapSingleton (_modelAddress_stk $ _mtxo_address ui) (invert val')) a
+                      <> foldMap (\ui -> grpMapSingleton (_modelAddress_stk $ _mtxo_address ui) val) b
                 }
      in b2t <$> (a2fb $ fmap snd a)
 
@@ -641,9 +823,8 @@ applyModelDCert =
           mark . modelSnapshot_delegations . at maddr .= Nothing
         ModelDelegate (ModelDelegation maddr poolId) -> mark . modelSnapshot_delegations . at maddr .= Just poolId
         ModelRegisterPool pool -> mark . modelSnapshot_pools . at (_mppId pool) .= Just pool
+        -- TODO: deal with epochNo
         ModelRetirePool poolId _epochNo -> mark . modelSnapshot_pools . at poolId .= Nothing
-
--- TODO: deal with epochNo
 
 applyModelTx :: ModelTx era -> ModelLedger era -> ModelLedger era
 applyModelTx tx = State.execState $ do
@@ -746,3 +927,5 @@ instance Monad SnapshotQueue where
 instance Semigroup a => Semigroup (SnapshotQueue a) where (<>) = liftA2 (<>)
 
 instance Monoid a => Monoid (SnapshotQueue a) where mempty = pure mempty
+
+instance NFData IsValid

@@ -24,6 +24,7 @@ module Cardano.Ledger.Alonzo.Scripts
     isPlutusScript,
     alwaysSucceeds,
     alwaysFails,
+    sumEvenArgs,
     pointWiseExUnits,
 
     -- * Cost Model
@@ -89,6 +90,7 @@ import Plutus.V1.Ledger.Api (defaultCostModelParams, validateCostModelParams)
 import qualified Plutus.V1.Ledger.Examples as Plutus
   ( alwaysFailingNAryFunction,
     alwaysSucceedingNAryFunction,
+    sumEvenArgs,
   )
 import qualified Prettyprinter as PP
 
@@ -134,6 +136,9 @@ instance SafeToHash (Script era) where
 alwaysSucceeds, alwaysFails :: Natural -> Script era
 alwaysSucceeds n = PlutusScript (Plutus.alwaysSucceedingNAryFunction n)
 alwaysFails n = PlutusScript (Plutus.alwaysFailingNAryFunction n)
+
+sumEvenArgs :: Integer -> [Bool] -> Script era
+sumEvenArgs n ps = PlutusScript (Plutus.sumEvenArgs n ps)
 
 isPlutusScript :: Script era -> Bool
 isPlutusScript (PlutusScript _) = True

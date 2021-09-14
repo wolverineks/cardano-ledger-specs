@@ -55,7 +55,7 @@ instance
             ApplyTxError
               [UtxowFailure (UtxoFailure (ValueNotConservedUTxO x' y'))]
 
-  makeTxBody _ (TxBodyArguments maxTTL fee ins outs dcerts wdrl (NoMintSupport ()) (NoPlutusSupport ()) (NoPlutusSupport ())) =
+  makeTxBody _ (TxBodyArguments maxTTL fee ins outs dcerts wdrl (NoMintSupport ()) (NoPlutusSupport ()) (NoPlutusSupport ()) (NoPlutusSupport ())) =
     Shelley.TxBody
       { Shelley._inputs = ins,
         Shelley._outputs = outs,
@@ -67,5 +67,5 @@ instance
         Shelley._mdHash = SNothing
       }
 
-  makeTx _ realTxBody (TxWitnessArguments wits (NoScriptSupport ()) (NoPlutusSupport ())) =
+  makeTx _ realTxBody (TxWitnessArguments wits (NoScriptSupport ()) (NoPlutusSupport ()) (NoPlutusSupport ())) =
     Shelley.Tx realTxBody (mempty {Shelley.addrWits = wits}) SNothing

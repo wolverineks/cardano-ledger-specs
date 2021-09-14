@@ -54,7 +54,7 @@ instance Default AlonzoGenesis where
         maxTxExUnits = ExUnits 100 100,
         maxBlockExUnits = ExUnits 100 100,
         maxValSize = 100000,
-        collateralPercentage = 100,
+        collateralPercentage = 0,
         maxCollateralInputs = 100
       }
 
@@ -88,7 +88,7 @@ instance
   makePlutusScript _ (SupportsPlutus x) = x -- Alonzo.PlutusScript
   makeExtendedTxOut _ (Alonzo.TxOut a v _) (SupportsPlutus dh) = Alonzo.TxOut a v (SJust dh)
 
-  makeTxBody nes (TxBodyArguments maxTTL fee ins outs dcerts wdrl (SupportsMint mint) (SupportsPlutus redeemers) (SupportsPlutus cins)) =
+  makeTxBody nes (TxBodyArguments maxTTL fee ins outs dcerts wdrl (SupportsMint mint) (SupportsPlutus redeemers) (SupportsPlutus cins) (SupportsPlutus _)) =
     Alonzo.TxBody
       { Alonzo.inputs = ins,
         Alonzo.collateral = cins,
@@ -100,12 +100,18 @@ instance
         Alonzo.txUpdates = SNothing,
         Alonzo.reqSignerHashes = Set.empty,
         Alonzo.mint = mint,
-        Alonzo.scriptIntegrityHash = redeemers >>= uncurry (Alonzo.hashScriptIntegrity (LedgerState.esPp . LedgerState.nesEs $ nes) (Set.singleton PlutusV1)),
+        Alonzo.scriptIntegrityHash =
+          redeemers
+            >>= uncurry
+              ( Alonzo.hashScriptIntegrity
+                  (LedgerState.esPp . LedgerState.nesEs $ nes)
+                  (Set.singleton PlutusV1)
+              ),
         Alonzo.adHash = SNothing,
         Alonzo.txnetworkid = SNothing -- SJust Testnet
       }
 
-  makeTx _ realTxBody (TxWitnessArguments wits (SupportsScript ScriptFeatureTag_PlutusV1 scripts) (SupportsPlutus (rdmr, dats))) =
+  makeTx _ realTxBody (TxWitnessArguments wits (SupportsScript ScriptFeatureTag_PlutusV1 scripts) (SupportsPlutus (rdmr, dats)) (SupportsPlutus isValid)) =
     let witSet =
           Alonzo.TxWitness
             { Alonzo.txwitsVKey = wits,
@@ -114,4 +120,4 @@ instance
               Alonzo.txdats = dats,
               Alonzo.txrdmrs = rdmr
             }
-     in (Alonzo.ValidatedTx realTxBody witSet (Alonzo.IsValid True) SNothing)
+     in (Alonzo.ValidatedTx realTxBody witSet isValid SNothing)

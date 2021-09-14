@@ -25,6 +25,7 @@
 
 module Test.Cardano.Ledger.DependGraph where
 
+import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.BaseTypes (Globals, boundRational, epochInfo)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Keys (KeyRole (..))
@@ -49,10 +50,13 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.Merge.Strict as Map
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Proxy
 import Data.Ratio ((%))
 import Data.Semigroup.Foldable (fold1)
+import Data.Sequence (Seq (..))
+import qualified Data.Sequence as Seq
+import qualified Data.Sequence.Strict as StrictSeq
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Traversable
@@ -107,12 +111,14 @@ type GenModelM st era m =
     HasModelLedger era st,
     MonadGen m,
     KnownRequiredFeatures era,
-    MonadSupply Integer m
+    MonadSupply Integer m,
+    Show st
   )
 
-genInputs :: GenModelM st era m => m (Map ModelUTxOId (ModelTxOut era))
-genInputs = do
-  utxos0 <- shuffle =<< uses (modelLedger . modelLedger_utxos) (Map.toList . _modelUtxoMap_utxos)
+genInputs :: GenModelM st era m => AllowScripts (ScriptFeature era) -> m (Map ModelUTxOId (ModelTxOut era))
+genInputs allowScripts = do
+  actualUtxos <- uses (modelLedger . modelLedger_utxos) _modelUtxoMap_utxos
+  utxos0 <- shuffle =<< uses (modelLedger . modelLedger_utxos) (mapMaybe (_2 . _2 . modelTxOut_address . modelAddress_pmt $ guardHaveCollateral allowScripts) . Map.toList . _modelUtxoMap_utxos)
 
   let spendable :: (Coin, ModelTxOut era) -> Coin
       spendable = fst
@@ -120,7 +126,12 @@ genInputs = do
       go :: [(ModelUTxOId, (Coin, ModelTxOut era))] -> Coin -> [(ModelUTxOId, (Coin, ModelTxOut era))] -> [(ModelUTxOId, (Coin, ModelTxOut era))]
       go [] val acc
         | val >= Coin (minFee + minOutput) = acc
-        | otherwise = error "insufficient UTxO's to proceed with generation."
+        | otherwise =
+          error $
+            unlines
+              [ "insufficient UTxO's to proceed with generation.",
+                show actualUtxos
+              ]
       -- TODO, get rewards/fees back into circulation in generator.
       go (utxo : rest) val acc
         | val < Coin (minFee + minOutput) = go rest (val <> spendable (snd utxo)) (utxo : acc)
@@ -164,14 +175,42 @@ genScriptData :: forall sf r. KnownScriptFeature sf => ModelCredential r sf -> G
 genScriptData addr = traverseSupportsPlutus id $
   ifSupportsPlutus (Proxy :: Proxy sf) () $ case addr of
     ModelKeyHashObj _ -> pure Nothing
-    ModelScriptHashObj _ -> Just . PlutusTx.I <$> arbitrary
+    -- ModelScriptHashObj _ -> Just . PlutusTx.I <$> arbitrary
+    ModelScriptHashObj _ -> Just . PlutusTx.I <$> pure 2
+
+type AllowScripts sf = IfSupportsPlutus () Bool sf
+
+genCollateral ::
+  forall era m st.
+  GenModelM st era m =>
+  m (AllowScripts (ScriptFeature era), IfSupportsPlutus () (Set ModelUTxOId) (ScriptFeature era))
+genCollateral = do
+  res <- flip traverseSupportsPlutus (reifySupportsPlutus (Proxy :: Proxy (ScriptFeature era))) $ \() -> do
+    availableCollateralInputs <- uses modelLedger $ _modelUtxoMap_collateralUtxos . _modelLedger_utxos
+    numCollateralInputs <- choose (1, min 5 (Set.size availableCollateralInputs - 1))
+    (collateral, rest) <- chooseElems numCollateralInputs availableCollateralInputs
+    -- avoid spending the last unlocked utxo
+    pure $
+      if 10 > Set.size rest -- genInputs may use up to 8 inputs.
+        then Set.empty
+        else collateral
+
+  pure (mapSupportsPlutus (not . Set.null) res, res)
+
+guardHaveCollateral ::
+  IfSupportsPlutus () Bool sf ->
+  ModelCredential k sf ->
+  Maybe (ModelCredential k sf)
+guardHaveCollateral (SupportsPlutus False) (ModelScriptHashObj _) = Nothing
+guardHaveCollateral _ x = Just x
 
 genOutputs ::
   GenModelM st era m =>
+  AllowScripts (ScriptFeature era) ->
   Map ModelUTxOId (ModelTxOut era) ->
   IfSupportsMint () (ModelValue (ValueFeature era) era) (ValueFeature era) ->
   m ([(ModelUTxOId, ModelTxOut era)], ModelValue 'ExpectAdaOnly era)
-genOutputs ins mint = do
+genOutputs haveCollateral ins mint = do
   -- by assumption, there are no rewards; since they would have been outputs to
   -- earlier transactions, and thus have different value now. thus the non-ada
   -- values are entirely known qty multi-asset outputs.
@@ -195,46 +234,72 @@ genOutputs ins mint = do
   outs <- for outVals $ \outVal -> do
     ui <- freshUtxoId
     addr <-
-      frequency
-        [ (1, elements $ fmap _mtxo_address $ toList ins),
-          (1, freshPaymentAddress "genOutputs"),
-          (bool 1 0 (null delegates), freshWdrlAddress =<< elements delegates)
-        ]
-    dh <- liftGen $ genScriptData $ _modelAddres_pmt addr
+      oneof $
+        (fmap pure $ mapMaybe ((modelAddress_pmt $ guardHaveCollateral haveCollateral) . _mtxo_address) $ toList ins)
+          <> [genAddr haveCollateral "genOutputs"]
+          <> if null delegates then [] else [freshWdrlAddress =<< elements delegates]
+    dh <- liftGen $ genScriptData $ _modelAddress_pmt addr
     pure (ui, ModelTxOut addr (ModelValue $ mkModelValue outVal) dh)
   pure (outs, ModelValue $ ModelValue_Inject $ Coin $ fee)
 
-genDCert :: forall st era m. GenModelM st era m => m (ModelDCert era)
-genDCert = do
+genDCert :: forall st era m. GenModelM st era m => AllowScripts (ScriptFeature era) -> m (ModelDCert era)
+genDCert allowScripts = do
   stakeHolders <- uses (modelLedger . modelLedger_utxos) $ Map.keysSet . unGrpMap . _modelUtxoMap_stake
   registeredStake <- uses (modelLedger . modelLedger_stake . snapshotQueue_mark . modelSnapshot_stake) $ Map.keysSet
   pools <- uses (modelLedger . modelLedger_stake . snapshotQueue_mark . modelSnapshot_pools) $ Map.keys
 
   let unregisteredStake = Set.difference stakeHolders registeredStake
+      registeredStake' = Set.filter (isJust . guardHaveCollateral allowScripts) registeredStake
 
   frequency $
     [(1, ModelRegisterPool <$> genModelPool)]
       <> [ (1, ModelRegisterStake <$> elements (Set.toList unregisteredStake))
            | not (null unregisteredStake)
          ]
-      <> [ (1, fmap ModelDelegate $ ModelDelegation <$> elements (Set.toList registeredStake) <*> elements pools)
-           | not (null registeredStake),
+      <> [ (1, fmap ModelDelegate $ ModelDelegation <$> elements (Set.toList registeredStake') <*> elements pools)
+           | not (null registeredStake'),
              not (null pools)
          ]
 
-genWdrl :: GenModelM st era m => m (Set (ModelCredential 'Staking (ScriptFeature era)))
-genWdrl = do
+genWdrl :: GenModelM st era m => AllowScripts (ScriptFeature era) -> m (Set (ModelCredential 'Staking (ScriptFeature era)))
+genWdrl allowScripts = do
   allRewards <- use (modelLedger . modelLedger_rewards)
-  rewards <- sublistOf $ Set.toList allRewards
+  rewards <- sublistOf $ mapMaybe (guardHaveCollateral allowScripts) $ Set.toList allRewards
   pure $ Set.fromList rewards
+
+needCollateral ::
+  forall era.
+  KnownScriptFeature (ScriptFeature era) =>
+  Map ModelUTxOId (ModelTxOut era) ->
+  Map (ModelCredential 'Staking (ScriptFeature era)) (ModelValue 'ExpectAdaOnly era) ->
+  IfSupportsMint () (ModelValue (ValueFeature era) era) (ValueFeature era) ->
+  [ModelDCert ('FeatureSet (ValueFeature era) (ScriptFeature era))] ->
+  Bool
+needCollateral ins wdrls mint dcerts = case reifySupportsPlutus (Proxy :: Proxy (ScriptFeature era)) of
+  NoPlutusSupport () -> False
+  SupportsPlutus () ->
+    has (traverse . modelTxOut_address . modelAddress_pmt . _ModelScriptHashObj) ins
+      || has (traverse . _ModelScriptHashObj) (Map.keys wdrls)
+      || fromSupportsMint (\() -> False) (any isPlutusMintAsset . unModelValue) mint
+      || has (traverse . _ModelDelegate . modelDelegation_delegator . _ModelScriptHashObj) dcerts
+  where
+    isPlutusMintAsset :: ModelValueVars era (ValueFeature era) -> Bool
+    isPlutusMintAsset (ModelValue_MA (ModelScript_PlutusV1 _, _)) = True
+    isPlutusMintAsset _ = False
+
+wouldSpendLastCollateral :: GenModelM st era m => ModelTx era -> m Bool
+wouldSpendLastCollateral txn = do
+  ml' <- uses modelLedger (applyModelTx txn)
+  pure . Set.null . _modelUtxoMap_collateralUtxos $ _modelLedger_utxos ml'
 
 genModelTx :: forall era m st. GenModelM st era m => m (ModelTx era)
 genModelTx = do
-  ins <- genInputs
-  wdrl <- Map.fromSet (ModelValue . ModelValue_Var . ModelValue_Reward) <$> genWdrl
+  (haveCollateral, collateral) <- genCollateral
+  ins <- genInputs haveCollateral
+  wdrl <- Map.fromSet (ModelValue . ModelValue_Var . ModelValue_Reward) <$> genWdrl haveCollateral
 
   mint <- pure $ ifSupportsMint (Proxy :: Proxy (ValueFeature era)) () mempty
-  (outs, fee) <- genOutputs ins mint
+  (outs, fee) <- genOutputs haveCollateral ins mint
   let txn =
         ModelTx
           { _mtxInputs = Map.keysSet ins,
@@ -243,19 +308,23 @@ genModelTx = do
             _mtxDCert = [],
             _mtxWdrl = wdrl,
             _mtxMint = mint,
-            _mtxCollateral = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () Set.empty
+            _mtxCollateral = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () Set.empty,
+            _mtxValidity = ifSupportsPlutus (Proxy :: Proxy (ScriptFeature era)) () (IsValid True),
+            _mtxRedeemers = Map.empty,
+            _mtxWitnessSigs = Set.empty
           }
 
   dcerts <- do
     st0 <- modelLedger <<%= applyModelTx txn
     numDCerts <- liftGen =<< asks (_genActionContexts_numDCerts . snd)
     dcerts <- replicateM numDCerts $ do
-      dcert <- genDCert
+      dcert <- genDCert haveCollateral
       modelLedger %= applyModelDCert dcert
       pure dcert
 
     modelLedger .= st0
 
+    -- TODO: this isn't neccessary, remove it.
     let removeDupDelegs seen = \case
           [] -> []
           dcert@(ModelDelegate (ModelDelegation x _)) : rest
@@ -264,7 +333,13 @@ genModelTx = do
           dcert : rest -> dcert : removeDupDelegs seen rest
     pure $ removeDupDelegs Set.empty dcerts
 
-  pure txn {_mtxDCert = dcerts}
+  let nc = needCollateral ins wdrl mint dcerts
+  uses modelLedger $
+    witnessModelTx
+      txn
+        { _mtxDCert = dcerts,
+          _mtxCollateral = if nc then collateral else _mtxCollateral txn
+        }
 
 genBlocksMade :: GenModelM st era m => m ModelBlocksMade
 genBlocksMade = do
@@ -289,6 +364,16 @@ genModelEpoch = do
     numTxns <- liftGen =<< asks (_genActionContexts_txnsPerSlot . snd)
     txns <- replicateM numTxns $ do
       txn <- genModelTx
+      wouldSpendLastCollateral txn >>= \case
+        False -> pure ()
+        True -> do
+          st <- State.get
+          error $
+            unlines
+              [ "wouldSpendLastCollateral",
+                show txn,
+                show st
+              ]
       modelLedger %= applyModelTx txn
       pure txn
     pure
@@ -316,13 +401,12 @@ graphHeads gr = mapMaybe f (FGL.nodes gr)
 
 -- TODO: this could be a more interesting pool.
 genModelPool :: (Show n, MonadSupply n m) => m (ModelPoolParams era)
-genModelPool = freshPoolAddress >>= genModelPool'
-
-genModelPool' :: (Show n, MonadSupply n m) => ModelPoolId -> m (ModelPoolParams era)
-genModelPool' pool = do
+genModelPool = do
+  poolId <- freshPoolAddress
+  poolVrf <- freshCredential "poolVrf"
   racct <- freshRewardAddress
   powner <- freshRewardAddress
-  pure $ ModelPoolParams pool (Coin 0) (Coin 0) (fromJust $ boundRational $ 0 % 1) racct [powner]
+  pure $ ModelPoolParams poolId poolVrf (Coin 0) (Coin 0) (fromJust $ boundRational $ 0 % 1) racct [powner]
 
 minFee :: Integer
 minFee = 100000
@@ -521,6 +605,60 @@ freshPaymentAddress clue =
     <$> freshCredential ("pmt:" <> clue)
     <*> freshCredential ("stk:" <> clue)
 
+freshPaymentScript ::
+  MonadSupply Integer m =>
+  m (ModelCredential 'Payment ('TyScriptFeature x 'True))
+freshPaymentScript = do
+  x <- supply
+  pure $ ModelScriptHashObj $ ModelPlutusScript_Parity x [True, True, False]
+
+genPaymentCredential ::
+  forall sf m.
+  (KnownScriptFeature sf, MonadSupply Integer m, MonadGen m) =>
+  AllowScripts sf ->
+  String ->
+  m (ModelCredential 'Payment sf)
+genPaymentCredential haveCollateral clue =
+  oneof $
+    [freshCredential clue] <> case reifyScriptFeature (Proxy :: Proxy sf) of
+      ScriptFeatureTag_None -> []
+      ScriptFeatureTag_Simple -> []
+      ScriptFeatureTag_PlutusV1 -> case haveCollateral of
+        SupportsPlutus True -> [freshPaymentScript]
+        _ -> []
+
+freshStakeScript ::
+  MonadSupply Integer m =>
+  m (ModelCredential 'Staking ('TyScriptFeature x 'True))
+freshStakeScript = do
+  x <- supply
+  pure $ ModelScriptHashObj $ ModelPlutusScript_Parity x [True, False]
+
+genStakingCredential ::
+  forall sf m.
+  (KnownScriptFeature sf, MonadSupply Integer m, MonadGen m) =>
+  String ->
+  m (ModelCredential 'Staking sf)
+genStakingCredential clue =
+  oneof $
+    [freshCredential clue] <> case reifyScriptFeature (Proxy :: Proxy sf) of
+      ScriptFeatureTag_None -> []
+      ScriptFeatureTag_Simple -> []
+      ScriptFeatureTag_PlutusV1 -> [freshStakeScript]
+
+genAddr ::
+  ( MonadGen m,
+    MonadSupply Integer m,
+    KnownScriptFeature sf
+  ) =>
+  AllowScripts sf ->
+  String ->
+  m (ModelAddress sf)
+genAddr haveCollateral clue =
+  ModelAddress
+    <$> genPaymentCredential haveCollateral clue
+    <*> genStakingCredential clue
+
 freshCredential :: (Show n, MonadSupply n m) => String -> m (ModelCredential r era)
 freshCredential clue = ModelKeyHashObj . (clue <>) . show <$> supply
 
@@ -528,28 +666,55 @@ freshRewardAddress :: (Show n, MonadSupply n m) => m (ModelCredential 'Staking e
 freshRewardAddress = ModelKeyHashObj . ("reward_" <>) . show <$> supply
 
 freshPoolAddress :: (Show n, MonadSupply n m) => m ModelPoolId
-freshPoolAddress = ModelPoolId . ("pool_" <>) . show <$> supply
+freshPoolAddress = ModelPoolId <$> freshCredential "pool_"
 
 freshWdrlAddress :: (Show n, MonadSupply n m) => ModelCredential 'Staking era -> m (ModelAddress era)
 freshWdrlAddress c = do
   c' <- case c of
     ModelKeyHashObj x -> freshCredential ("wdrl-" <> x)
-    ModelScriptHashObj x -> freshCredential "wdrl"
+    ModelScriptHashObj _ -> freshCredential "wdrl"
   pure $ ModelAddress c' c
-
--- TODO: handle this more elegantly
-modelTxOut ::
-  forall era.
-  KnownScriptFeature (ScriptFeature era) =>
-  (ModelAddress (ScriptFeature era)) ->
-  (ModelValue (ValueFeature era) era) ->
-  ModelTxOut era
-modelTxOut x y =
-  ModelTxOut x y $
-    ifSupportsPlutus (Proxy @(ScriptFeature era)) () Nothing
 
 -- Orphans
 deriving newtype instance System.Random.Random EpochNo -- TODO: this can be moved closer to the package that defines EpochNo
+
+class ChooseElems a where
+  chooseElems :: MonadGen m => Int -> a -> m (a, a)
+
+mkSeqChooseElems ::
+  MonadGen m =>
+  (s -> Int) ->
+  s ->
+  (s -> a -> s) ->
+  (Int -> s -> a) ->
+  (Int -> s -> s) ->
+  (Int -> s -> s) ->
+  (s -> s -> s) ->
+  Int ->
+  s ->
+  m (s, s)
+mkSeqChooseElems seqSize emptySeq seqAppend seqElemAt seqTake seqDrop seqConcat =
+  let go n (xs, ys) =
+        let sz = seqSize ys
+         in if n <= 0 || sz <= 0
+              then pure (xs, ys)
+              else do
+                i <- choose (0, sz - 1)
+                go (n -1) (seqAppend xs (seqElemAt i ys), seqTake i ys `seqConcat` seqDrop (i + 1) ys)
+   in \n0 xs0 -> go n0 (emptySeq, xs0)
+{-# INLINE mkSeqChooseElems #-}
+
+instance ChooseElems (Seq a) where
+  chooseElems = mkSeqChooseElems Seq.length mempty (:>) (flip Seq.index) Seq.take Seq.drop (<>)
+
+instance ChooseElems (StrictSeq.StrictSeq a) where
+  chooseElems = mkSeqChooseElems StrictSeq.length mempty (StrictSeq.:|>) (\i -> maybe (error "ChooseElems @StrictSeq") id . StrictSeq.lookup i) StrictSeq.take StrictSeq.drop (<>)
+
+instance Ord k => ChooseElems (Map k a) where
+  chooseElems = mkSeqChooseElems Map.size Map.empty (\xs (k, x) -> Map.insert k x xs) Map.elemAt Map.take Map.drop Map.union
+
+instance Ord a => ChooseElems (Set a) where
+  chooseElems = mkSeqChooseElems Set.size Set.empty (flip Set.insert) Set.elemAt Set.take Set.drop Set.union
 
 instance MonadGen g => MonadGen (State.StateT s g) where
   liftGen = lift . liftGen
@@ -576,6 +741,7 @@ data Faucet a = Faucet
   { _faucet_supply :: !Integer,
     _faucet_state :: !a
   }
+  deriving (Show)
 
 faucet_supply :: Lens' (Faucet a) Integer
 faucet_supply a2fb s = (\b -> s {_faucet_supply = b}) <$> a2fb (_faucet_supply s)

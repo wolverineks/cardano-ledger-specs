@@ -20,7 +20,7 @@
 module Test.Cardano.Ledger.ModelChain.Properties where
 
 import Cardano.Ledger.Alonzo (AlonzoEra)
-import Cardano.Ledger.Alonzo.Scripts (Tag (..))
+import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Tag (..))
 import Cardano.Ledger.BaseTypes (Globals (..), boundRational)
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
@@ -30,6 +30,7 @@ import Cardano.Ledger.Shelley (ShelleyEra)
 import Control.Arrow ((&&&))
 import Control.DeepSeq
 import Control.Lens
+import Control.Monad (when)
 import qualified Control.Monad.State.Strict as State
 import qualified Control.Monad.Writer.Strict as Writer
 import Control.State.Transition.Extended
@@ -40,10 +41,11 @@ import Data.Functor.Contravariant (Predicate (..))
 import Data.HKD
 import qualified Data.List as List
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Monoid (Endo (..))
 import Data.Ratio ((%))
 import qualified Data.Set as Set
+import Data.Some (Some (Some))
 import Data.String (IsString (..))
 import Data.Typeable
 import GHC.Generics
@@ -127,21 +129,33 @@ instance IsString AssetName where
 modelTestDelegations ::
   ( ElaborateEraModel era,
     Default (AdditionalGenesisConfig era),
-    -- Eq (PredicateFailure (Core.EraRule "LEDGER" era)),
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
-    Show (Core.Value era)
+    Show (Core.Value era),
+    Show (Core.Tx era),
+    Show (Core.Script era)
   ) =>
   proxy era ->
   Bool ->
   ModelAddress AllScriptFeatures ->
   [TestTree]
 modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) =
-  let modelPool = ModelPoolParams "pool1" (Coin 0) (Coin 0) (fromJust $ boundRational $ 0 % 1) "rewardAcct" ["poolOwner"]
+  let modelPool =
+        ModelPoolParams
+          "pool1"
+          "pool1'"
+          (Coin 0)
+          (Coin 0)
+          (fromJust $ boundRational $ 0 % 1)
+          "rewardAcct"
+          ["poolOwner"]
+      modelDelegation = ModelDelegate (ModelDelegation stakeCred "pool1")
       allAtOnce =
         [ ModelBlock
             0
             [ modelTx
                 { _mtxInputs = Set.fromList [0],
+                  _mtxWitnessSigs = Set.fromList $ ["unstaked", "pool1", "poolOwner"] <> mapMaybe mkWitness [_modelAddress_pmt stakeAddr],
+                  _mtxRedeemers = Map.fromList [x | x <- [(ModelScriptPurpose_Certifying modelDelegation, (PlutusTx.I 5, ExUnits 1 1))], needsCollateral],
                   _mtxCollateral = SupportsPlutus $ Set.fromList [x | x <- [0], needsCollateral],
                   _mtxOutputs =
                     [ (100, modelTxOut "unstaked" (modelCoin 9_800_000_000_000)),
@@ -151,7 +165,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
                   _mtxDCert =
                     [ ModelRegisterStake stakeCred,
                       ModelRegisterPool modelPool,
-                      ModelDelegate (ModelDelegation stakeCred "pool1")
+                      modelDelegation
                     ]
                 }
             ]
@@ -161,6 +175,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
             0
             [ modelTx
                 { _mtxInputs = Set.fromList [0],
+                  _mtxWitnessSigs = Set.fromList ["unstaked"],
                   _mtxOutputs =
                     [ (1, modelTxOut "unstaked" (modelCoin 9_875_000_000_000)),
                       (101, modelTxOut stakeAddr (modelCoin 100_000_000_000))
@@ -172,6 +187,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
             1
             [ modelTx
                 { _mtxInputs = Set.fromList [1],
+                  _mtxWitnessSigs = Set.fromList ["unstaked"],
                   _mtxOutputs =
                     [ (2, modelTxOut "unstaked" (modelCoin 9_850_000_000_000))
                     ],
@@ -183,6 +199,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
             2
             [ modelTx
                 { _mtxInputs = Set.fromList [2],
+                  _mtxWitnessSigs = Set.fromList ["unstaked", "pool1", "poolOwner"],
                   _mtxOutputs =
                     [ (3, modelTxOut "unstaked" (modelCoin 9_825_000_000_000))
                     ],
@@ -194,13 +211,15 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
             3
             [ modelTx
                 { _mtxInputs = Set.fromList [3],
+                  _mtxWitnessSigs = Set.fromList $ ["unstaked"] <> mapMaybe mkWitness [_modelAddress_pmt stakeAddr],
+                  _mtxRedeemers = Map.fromList [x | x <- [(ModelScriptPurpose_Certifying modelDelegation, (PlutusTx.I 5, ExUnits 1 1))], needsCollateral],
                   _mtxCollateral = SupportsPlutus $ Set.fromList [x | x <- [3], needsCollateral],
                   _mtxOutputs =
                     [ (100, modelTxOut "unstaked" (modelCoin 9_800_000_000_000))
                     ],
                   _mtxFee = modelCoin 25_000_000_000,
                   _mtxDCert =
-                    [ ModelDelegate (ModelDelegation stakeCred "pool1")
+                    [ modelDelegation
                     ]
                 }
             ]
@@ -212,22 +231,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
         let rewards = observeRewards (-1, -1, -1) (nes, ems)
          in counterexample (show rewards) $ Coin 0 === fold rewards
 
-      unStake =
-        [ ModelBlock
-            0
-            [ modelTx
-                { _mtxInputs = Set.fromList [101],
-                  _mtxCollateral = SupportsPlutus $ Set.fromList [x | x <- [100], needsCollateral],
-                  _mtxOutputs =
-                    [ (102, modelTxOut "unstaked" (modelCoin 75_000_000_000))
-                    ],
-                  _mtxFee = modelCoin 25_000_000_000,
-                  _mtxDCert =
-                    [ ModelDelegate (ModelDelegation stakeCred "pool1")
-                    ]
-                }
-            ]
-        ]
+      mkWitness = filterModelCredential (FeatureTag ValueFeatureTag_AdaOnly ScriptFeatureTag_None)
 
       go reg =
         testChainModelInteractionWith
@@ -235,7 +239,7 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
           checkAllWithdrawnRewards
           genAct
           [ ModelEpoch reg (ModelBlocksMade $ Map.fromList []),
-            ModelEpoch unStake (ModelBlocksMade $ Map.fromList []),
+            ModelEpoch [] (ModelBlocksMade $ Map.fromList []),
             ModelEpoch [] (ModelBlocksMade $ Map.fromList [("pool1", 1 % 1)]),
             ModelEpoch [] (ModelBlocksMade $ Map.fromList []),
             ModelEpoch
@@ -243,6 +247,8 @@ modelTestDelegations proxy needsCollateral stakeAddr@(ModelAddress _ stakeCred) 
                   0
                   [ modelTx
                       { _mtxInputs = Set.fromList [100],
+                        _mtxWitnessSigs = Set.fromList $ ["unstaked"] <> mapMaybe mkWitness [_modelAddress_pmt stakeAddr],
+                        _mtxRedeemers = Map.fromList [x | x <- [(ModelScriptPurpose_Rewarding stakeCred, (PlutusTx.I 5, ExUnits 1 1))], needsCollateral],
                         _mtxCollateral = SupportsPlutus $ Set.fromList [x | x <- [100], needsCollateral],
                         _mtxOutputs =
                           [ (103, modelTxOut "unstaked" (modelCoin 9_700_000_000_000)),
@@ -358,7 +364,9 @@ data ModelStats f = ModelStats
     _numberOfCerts :: f Int,
     _blocksMade :: f Rational,
     _numberOfDelegations :: f Int,
-    _withdrawals :: f Int
+    _withdrawals :: f Int,
+    _scriptUTxOs :: f Int,
+    _scriptWdrls :: f Int
   }
   deriving (Generic)
 
@@ -378,7 +386,7 @@ instance FFoldable ModelStats where ffoldMap = ffoldMapDefault
 
 instance FTraversable ModelStats where ftraverse = gftraverse
 
-mstats :: ModelStats ((->) [ModelEpoch era])
+mstats :: forall era. ModelStats ((->) [ModelEpoch era])
 mstats =
   ModelStats
     { _numberOfEpochs = lengthOf (traverse),
@@ -386,30 +394,61 @@ mstats =
       _numberOfCerts = lengthOf (traverse . modelDCerts),
       _blocksMade = sumOf (traverse . modelEpoch_blocksMade . _ModelBlocksMade . traverse),
       _numberOfDelegations = lengthOf (traverse . modelDCerts . _ModelDelegate),
-      _withdrawals = lengthOf (traverse . modelTxs . modelTx_wdrl . traverse)
+      _withdrawals = lengthOf (traverse . modelTxs . modelTx_wdrl . traverse),
+      _scriptUTxOs =
+        lengthOf (traverse . _2 . modelTxOut_address . modelAddress_pmt . traverseModelScriptHashObj)
+          . uncurry Map.restrictKeys
+          . ((_modelUtxoMap_utxos . collectModelUTxOs) &&& collectModelInputs),
+      _scriptWdrls =
+        lengthOf (traverse . traverseModelScriptHashObj) . (=<<) Map.keys . toListOf (traverse . modelTxs . modelTx_wdrl)
     }
 
-mstatsCover :: ModelStats (Const (Double, String) :*: Predicate)
+shelleyFeatureTag, alonzoFeatureTag :: Some FeatureTag
+shelleyFeatureTag = Some $ eraFeatureSet (Proxy :: Proxy (ShelleyEra C_Crypto))
+alonzoFeatureTag = Some $ eraFeatureSet (Proxy :: Proxy (AlonzoEra C_Crypto))
+
+mstatsCover :: ModelStats (Const (Some FeatureTag, Double, String) :*: Predicate)
 mstatsCover =
   ModelStats
-    { _numberOfEpochs = Const (90, "number of epochs") :*: Predicate (> 5),
-      _numberOfTransactions = Const (90, "number of transactions") :*: Predicate (> 5),
-      _numberOfCerts = Const (50, "number of certs") :*: Predicate (> 5),
-      _blocksMade = Const (50, "blocks made") :*: Predicate (> 2.5),
-      _numberOfDelegations = Const (10, "number of delegation") :*: Predicate (> 5),
-      _withdrawals = Const (10, "withdrawals") :*: Predicate (> 5)
+    { _numberOfEpochs = Const (shelleyFeatureTag, 90, "number of epochs") :*: Predicate (> 5),
+      _numberOfTransactions = Const (shelleyFeatureTag, 90, "number of transactions") :*: Predicate (> 5),
+      _numberOfCerts = Const (shelleyFeatureTag, 50, "number of certs") :*: Predicate (> 5),
+      _blocksMade = Const (shelleyFeatureTag, 50, "blocks made") :*: Predicate (> 2.5),
+      _numberOfDelegations = Const (shelleyFeatureTag, 10, "number of delegation") :*: Predicate (> 5),
+      _withdrawals = Const (shelleyFeatureTag, 10, "withdrawals") :*: Predicate (> 5),
+      _scriptUTxOs = Const (alonzoFeatureTag, 60, "script locked utxos") :*: Predicate (> 5),
+      _scriptWdrls = Const (alonzoFeatureTag, 40, "script locked withdrarwals") :*: Predicate (> 5)
     }
 
+collectModelUTxOs :: [ModelEpoch era] -> ModelUtxoMap era
+collectModelUTxOs epochs =
+  fold $
+    [ set (at ui) (Just txo) mempty
+      | tx <- toListOf (traverse . modelEpoch_blocks . traverse . modelBlock_txSeq . traverse) epochs,
+        (ui, txo) <- _mtxOutputs tx
+    ]
+
+collectModelInputs :: [ModelEpoch era] -> Set.Set ModelUTxOId
+collectModelInputs epochs =
+  fold $
+    [ _mtxInputs tx
+      | tx <- toListOf (traverse . modelEpoch_blocks . traverse . modelBlock_txSeq . traverse) epochs
+    ]
+
 propModelStats ::
-  Testable prop =>
+  forall era prop proxy.
+  (Testable prop, KnownRequiredFeatures era) =>
   -- [(ModelUTxOId, ModelAddress (ScriptFeature era), Coin)] ->
-  [ModelEpoch era] ->
+  proxy era ->
+  [ModelEpoch AllModelFeatures] ->
   prop ->
   Property
-propModelStats epochs =
-  execPropertyWriter $
-    ffor_ (fzipWith (:*:) mstats mstatsCover) $ \(f :*: (Const (pct, tag) :*: Predicate threshhold)) ->
-      tellProperty $ cover pct (threshhold $ f epochs) tag
+propModelStats proxy epochs =
+  let era = reifyRequiredFeatures proxy
+   in execPropertyWriter $
+        ffor_ (fzipWith (:*:) mstats mstatsCover) $ \(f :*: (Const (Some era', pct, tag) :*: Predicate threshhold)) ->
+          when (preceedsModelEra era' era) $
+            tellProperty $ cover pct (threshhold $ f epochs) tag
 
 examineModel ::
   [ModelEpoch era] ->
@@ -423,7 +462,8 @@ modelGenTest ::
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
     Show (Core.Value era),
     LedgerState.TransUTxOState Show era,
-    Show (Core.Tx era)
+    Show (Core.Tx era),
+    Show (Core.Script era)
   ) =>
   proxy era ->
   Property
@@ -431,7 +471,7 @@ modelGenTest proxy =
   forAllShrink (genModel' (reifyRequiredFeatures $ Proxy @(EraFeatureSet era)) testGlobals) (const []) $ \(a, b) ->
     ( execPropertyWriter $ do
         tellProperty $ counterexample ("numPools: " <> show (lengthOf (traverse . modelDCerts . _ModelDelegate) b))
-        tellProperty $ propModelStats b
+        tellProperty $ propModelStats (Proxy @(EraFeatureSet era)) b
     )
       (testChainModelInteractionWith proxy checkElaboratorResult a b)
 
@@ -463,7 +503,8 @@ modelUnitTests ::
     Show (PredicateFailure (Core.EraRule "LEDGER" era)),
     Show (Core.Value era),
     LedgerState.TransUTxOState Show era,
-    Show (Core.Tx era)
+    Show (Core.Tx era),
+    Show (Core.Script era)
   ) =>
   proxy era ->
   TestTree
@@ -497,7 +538,8 @@ modelUnitTests proxy =
                           [ (1, modelTxOut "bob" (modelCoin 100_000_000)),
                             (2, modelTxOut "alice" (modelCoin 1_000_000_000 $- (modelCoin 100_000_000 $+ modelCoin 1_000_000)))
                           ],
-                        _mtxFee = modelCoin 1_000_000
+                        _mtxFee = modelCoin 1_000_000,
+                        _mtxWitnessSigs = Set.fromList ["alice"]
                       }
                   ]
               ]
@@ -515,6 +557,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = (Set.fromList [0]),
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs = [(1, modelTxOut "bob" $ modelCoin 100_000_000)],
                         _mtxFee = modelCoin 1_000_000
                       }
@@ -533,6 +576,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ (1, modelTxOut "bob" (modelCoin 100_000_000)),
                             (2, modelTxOut "alice" (modelCoin 1_000_000_000 $- (modelCoin 100_000_000 $+ modelCoin 1_000_000)))
@@ -544,6 +588,7 @@ modelUnitTests proxy =
                   2
                   [ modelTx
                       { _mtxInputs = Set.fromList [2],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ (3, modelTxOut "bob" (modelCoin 100_000_000)),
                             (4, modelTxOut "alice" (modelCoin 1_000_000_000 $- 2 $* (modelCoin 100_000_000 $+ modelCoin 1_000_000)))
@@ -566,6 +611,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ ( 1,
                               modelTxOut
@@ -594,6 +640,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice", "BobCoin"],
                         _mtxOutputs =
                           [ ( 1,
                               modelTxOut
@@ -622,6 +669,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ ( 1,
                               modelTxOut
@@ -636,6 +684,7 @@ modelUnitTests proxy =
                       },
                     modelTx
                       { _mtxInputs = Set.fromList [1],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ ( 2,
                               modelTxOut
@@ -670,6 +719,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice", "BobCoin"],
                         _mtxOutputs =
                           [ ( 1,
                               modelTxOut
@@ -684,6 +734,7 @@ modelUnitTests proxy =
                       },
                     modelTx
                       { _mtxInputs = Set.fromList [1],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ ( 2,
                               modelTxOut
@@ -717,6 +768,8 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
+                        _mtxRedeemers = Map.singleton (ModelScriptPurpose_Minting $ modelPlutusScript 3) (PlutusTx.I 7, ExUnits 1 1),
                         _mtxCollateral = SupportsPlutus (Set.fromList [0]),
                         _mtxOutputs =
                           [ ( 1,
@@ -745,6 +798,7 @@ modelUnitTests proxy =
                   1
                   [ modelTx
                       { _mtxInputs = Set.fromList [0],
+                        _mtxWitnessSigs = Set.fromList ["alice"],
                         _mtxOutputs =
                           [ (1, modelTxOut "bob" (modelCoin 100_000_000)),
                             ( 2,
@@ -760,6 +814,8 @@ modelUnitTests proxy =
                   2
                   [ modelTx
                       { _mtxInputs = Set.fromList [2],
+                        _mtxWitnessSigs = Set.fromList ["bob"],
+                        _mtxRedeemers = Map.singleton (ModelScriptPurpose_Spending 2) (PlutusTx.I 7, ExUnits 1 1),
                         _mtxCollateral = SupportsPlutus (Set.fromList [1]),
                         _mtxOutputs =
                           [ (3, modelTxOut "bob" (modelCoin 100_000_000)),
@@ -780,13 +836,6 @@ modelUnitTests_ =
     [ modelUnitTests (Proxy :: Proxy (ShelleyEra C_Crypto)),
       modelUnitTests (Proxy :: Proxy (AlonzoEra C_Crypto))
     ]
-
-modelTxOut :: ModelAddress AllScriptFeatures -> ModelValue 'ExpectAnyOutput AllModelFeatures -> ModelTxOut AllModelFeatures
-modelTxOut a v = ModelTxOut a v (SupportsPlutus dh)
-  where
-    dh = case _modelAddres_pmt a of
-      ModelKeyHashObj _ -> Nothing
-      ModelScriptHashObj _ -> Just $ PlutusTx.I 42
 
 defaultTestMain :: IO ()
 defaultTestMain = defaultMain modelUnitTests_
