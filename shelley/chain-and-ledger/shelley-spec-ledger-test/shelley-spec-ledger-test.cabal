@@ -88,6 +88,7 @@ library
       Test.Shelley.Spec.Ledger.Rules.TestPoolreap
       Test.Shelley.Spec.Ledger.ShelleyTranslation
   build-depends:
+    array,
     base16-bytestring >= 1,
     bytestring,
     cardano-binary,
