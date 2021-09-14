@@ -71,54 +71,11 @@ import Data.Text.Prettyprint.Doc (Pretty (..))
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Typeable (Proxy (..), Typeable)
+import qualified Fake.Plutus.V2.Ledger.Api as PV2
 import GHC.Generics (Generic)
 import GHC.Records (HasField (..))
 import NoThunks.Class (NoThunks)
-import qualified Plutus.V1.Ledger.Api as P
-  ( Address (..),
-    BuiltinByteString,
-    Credential (..),
-    CurrencySymbol (..),
-    DCert (..),
-    Data (..),
-    Datum (..),
-    DatumHash (..),
-    EvaluationError (..),
-    ExBudget (..),
-    ExCPU (..),
-    ExMemory (..),
-    Interval (..),
-    POSIXTime (..),
-    POSIXTimeRange,
-    PubKeyHash (..),
-    ScriptContext (..),
-    ScriptPurpose (..),
-    StakingCredential (..),
-    TokenName (..),
-    TxId (..),
-    TxInInfo (..),
-    TxInfo (..),
-    TxOut (..),
-    TxOutRef (..),
-    ValidatorHash (..),
-    Value (..),
-    VerboseMode (..),
-    adaSymbol,
-    adaToken,
-    always,
-    dataToBuiltinData,
-    evaluateScriptRestricting,
-    from,
-    fromData,
-    lowerBound,
-    singleton,
-    strictUpperBound,
-    to,
-    toBuiltin,
-    toData,
-    unionWith,
-    validateScript,
-  )
+import qualified Plutus.V1.Ledger.Api as PV1
 import Plutus.V1.Ledger.Contexts ()
 import qualified Shelley.Spec.Ledger.HardForks as HardForks
   ( translateTimeForPlutusScripts,
@@ -140,48 +97,48 @@ import Shelley.Spec.Ledger.UTxO (UTxO (..))
 -- =========================================================
 -- Translate Hashes, Credentials, Certificates etc.
 
-transDataHash :: CC.Crypto c => StrictMaybe (DataHash c) -> Maybe P.DatumHash
+transDataHash :: CC.Crypto c => StrictMaybe (DataHash c) -> Maybe PV1.DatumHash
 transDataHash (SJust safe) = Just (transDataHash' safe)
 transDataHash SNothing = Nothing
 
-transDataHash' :: CC.Crypto c => DataHash c -> P.DatumHash
-transDataHash' safe = P.DatumHash (transSafeHash safe)
+transDataHash' :: CC.Crypto c => DataHash c -> PV1.DatumHash
+transDataHash' safe = PV1.DatumHash (transSafeHash safe)
 
-transKeyHash :: CC.Crypto c => KeyHash d c -> P.PubKeyHash
-transKeyHash (KeyHash (UnsafeHash h)) = P.PubKeyHash (P.toBuiltin (fromShort h))
+transKeyHash :: CC.Crypto c => KeyHash d c -> PV1.PubKeyHash
+transKeyHash (KeyHash (UnsafeHash h)) = PV1.PubKeyHash (PV1.toBuiltin (fromShort h))
 
-transScriptHash :: CC.Crypto c => ScriptHash c -> P.ValidatorHash
-transScriptHash (ScriptHash (UnsafeHash h)) = P.ValidatorHash (P.toBuiltin (fromShort h))
+transScriptHash :: CC.Crypto c => ScriptHash c -> PV1.ValidatorHash
+transScriptHash (ScriptHash (UnsafeHash h)) = PV1.ValidatorHash (PV1.toBuiltin (fromShort h))
 
-transSafeHash :: CC.Crypto c => SafeHash c i -> P.BuiltinByteString
-transSafeHash safe = case extractHash safe of UnsafeHash b -> P.toBuiltin (fromShort b)
+transSafeHash :: CC.Crypto c => SafeHash c i -> PV1.BuiltinByteString
+transSafeHash safe = case extractHash safe of UnsafeHash b -> PV1.toBuiltin (fromShort b)
 
 transHash :: HashAlgorithm h => Hash h a -> BS.ByteString
 transHash (UnsafeHash h) = fromShort h
 
-txInfoId :: CC.Crypto crypto => TxId crypto -> P.TxId
-txInfoId (TxId safe) = P.TxId (transSafeHash safe)
+txInfoId :: CC.Crypto crypto => TxId crypto -> PV1.TxId
+txInfoId (TxId safe) = PV1.TxId (transSafeHash safe)
 
-transStakeCred :: CC.Crypto crypto => Credential keyrole crypto -> P.Credential
+transStakeCred :: CC.Crypto crypto => Credential keyrole crypto -> PV1.Credential
 transStakeCred (ScriptHashObj (ScriptHash (UnsafeHash kh))) =
-  P.ScriptCredential (P.ValidatorHash (P.toBuiltin (fromShort kh)))
+  PV1.ScriptCredential (PV1.ValidatorHash (PV1.toBuiltin (fromShort kh)))
 transStakeCred (KeyHashObj (KeyHash (UnsafeHash kh))) =
-  P.PubKeyCredential (P.PubKeyHash (P.toBuiltin (fromShort kh)))
+  PV1.PubKeyCredential (PV1.PubKeyHash (PV1.toBuiltin (fromShort kh)))
 
-transStakeReference :: CC.Crypto crypto => StakeReference crypto -> Maybe P.StakingCredential
-transStakeReference (StakeRefBase cred) = Just (P.StakingHash (transStakeCred cred))
+transStakeReference :: CC.Crypto crypto => StakeReference crypto -> Maybe PV1.StakingCredential
+transStakeReference (StakeRefBase cred) = Just (PV1.StakingHash (transStakeCred cred))
 transStakeReference (StakeRefPtr (Ptr (SlotNo slot) i1 i2)) =
-  Just (P.StakingPtr (fromIntegral slot) (fromIntegral i1) (fromIntegral i2))
+  Just (PV1.StakingPtr (fromIntegral slot) (fromIntegral i1) (fromIntegral i2))
 transStakeReference StakeRefNull = Nothing
 
-transCred :: CC.Crypto crypto => Credential keyrole crypto -> P.Credential
+transCred :: CC.Crypto crypto => Credential keyrole crypto -> PV1.Credential
 transCred (KeyHashObj (KeyHash (UnsafeHash kh))) =
-  P.PubKeyCredential (P.PubKeyHash (P.toBuiltin (fromShort kh)))
+  PV1.PubKeyCredential (PV1.PubKeyHash (PV1.toBuiltin (fromShort kh)))
 transCred (ScriptHashObj (ScriptHash (UnsafeHash kh))) =
-  P.ScriptCredential (P.ValidatorHash (P.toBuiltin (fromShort kh)))
+  PV1.ScriptCredential (PV1.ValidatorHash (PV1.toBuiltin (fromShort kh)))
 
-transAddr :: CC.Crypto crypto => Addr crypto -> Maybe P.Address
-transAddr (Addr _net object stake) = Just (P.Address (transCred object) (transStakeReference stake))
+transAddr :: CC.Crypto crypto => Addr crypto -> Maybe PV1.Address
+transAddr (Addr _net object stake) = Just (PV1.Address (transCred object) (transStakeReference stake))
 transAddr (AddrBootstrap _bootaddr) = Nothing
 
 slotToPOSIXTime ::
@@ -190,9 +147,9 @@ slotToPOSIXTime ::
   EpochInfo m ->
   SystemStart ->
   SlotNo ->
-  m P.POSIXTime
+  m PV1.POSIXTime
 slotToPOSIXTime pp ei sysS s = do
-  P.POSIXTime . transTime . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
+  PV1.POSIXTime . transTime . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
     <$> epochInfoSlotToUTCTime ei sysS s
   where
     transTime =
@@ -210,27 +167,27 @@ transVITime ::
   EpochInfo m ->
   SystemStart ->
   ValidityInterval ->
-  m P.POSIXTimeRange
-transVITime _ _ _ (ValidityInterval SNothing SNothing) = pure P.always
+  m PV1.POSIXTimeRange
+transVITime _ _ _ (ValidityInterval SNothing SNothing) = pure PV1.always
 transVITime pp ei sysS (ValidityInterval (SJust i) SNothing) = do
   t <- slotToPOSIXTime pp ei sysS i
-  pure $ P.from t
+  pure $ PV1.from t
 transVITime pp ei sysS (ValidityInterval SNothing (SJust i)) = do
   t <- slotToPOSIXTime pp ei sysS i
-  pure $ P.to t
+  pure $ PV1.to t
 transVITime pp ei sysS (ValidityInterval (SJust i) (SJust j)) = do
   t1 <- slotToPOSIXTime pp ei sysS i
   t2 <- slotToPOSIXTime pp ei sysS j
   pure $
-    P.Interval
-      (P.lowerBound t1)
-      (P.strictUpperBound t2)
+    PV1.Interval
+      (PV1.lowerBound t1)
+      (PV1.strictUpperBound t2)
 
 -- ========================================
 -- translate TxIn and TxOut
 
-txInfoIn' :: CC.Crypto c => TxIn c -> P.TxOutRef
-txInfoIn' (TxIn txid nat) = P.TxOutRef (txInfoId txid) (fromIntegral nat)
+txInfoIn' :: CC.Crypto c => TxIn c -> PV1.TxOutRef
+txInfoIn' (TxIn txid nat) = PV1.TxOutRef (txInfoId txid) (fromIntegral nat)
 
 -- | Given a TxIn, look it up in the UTxO. If it exists, translate it and return
 --   (Just translation). If does not exist in the UTxO, return Nothing.
@@ -242,19 +199,19 @@ txInfoIn ::
   ) =>
   UTxO era ->
   TxIn (Crypto era) ->
-  Maybe P.TxInInfo
+  Maybe PV1.TxInInfo
 txInfoIn (UTxO mp) txin =
   case Map.lookup txin mp of
     Nothing -> Nothing
     Just txout -> case transAddr addr of
-      Just ad -> Just (P.TxInInfo (txInfoIn' txin) (P.TxOut ad valout dhash))
+      Just ad -> Just (PV1.TxInInfo (txInfoIn' txin) (PV1.TxOut ad valout dhash))
       Nothing -> Nothing
       where
         valout = transValue (getField @"value" txout)
         addr = getField @"address" txout
         dhash = case getField @"datahash" txout of
           SNothing -> Nothing
-          SJust safehash -> Just (P.DatumHash (transSafeHash safehash))
+          SJust safehash -> Just (PV1.DatumHash (transSafeHash safehash))
 
 -- | Given a TxOut, translate it and return (Just transalation). It is
 --   possible the address part is a Bootstrap Address, in that case return Nothing
@@ -265,77 +222,77 @@ txInfoOut ::
     Value era ~ Mary.Value (Crypto era)
   ) =>
   Alonzo.TxOut era ->
-  Maybe P.TxOut
+  Maybe PV1.TxOut
 txInfoOut (Alonzo.TxOut addr val datahash) =
   case transAddr addr of
-    Just ad -> Just (P.TxOut ad (transValue @(Crypto era) val) (transDataHash datahash))
+    Just ad -> Just (PV1.TxOut ad (transValue @(Crypto era) val) (transDataHash datahash))
     Nothing -> Nothing
 
 -- ==================================
 -- translate Values
 
-transPolicyID :: CC.Crypto crypto => Mary.PolicyID crypto -> P.CurrencySymbol
-transPolicyID (Mary.PolicyID (ScriptHash (UnsafeHash x))) = P.CurrencySymbol (P.toBuiltin (fromShort x))
+transPolicyID :: CC.Crypto crypto => Mary.PolicyID crypto -> PV1.CurrencySymbol
+transPolicyID (Mary.PolicyID (ScriptHash (UnsafeHash x))) = PV1.CurrencySymbol (PV1.toBuiltin (fromShort x))
 
-transAssetName :: Mary.AssetName -> P.TokenName
-transAssetName (Mary.AssetName bs) = P.TokenName (P.toBuiltin bs)
+transAssetName :: Mary.AssetName -> PV1.TokenName
+transAssetName (Mary.AssetName bs) = PV1.TokenName (PV1.toBuiltin bs)
 
-transValue :: forall c. CC.Crypto c => Mary.Value c -> P.Value
+transValue :: forall c. CC.Crypto c => Mary.Value c -> PV1.Value
 transValue (Mary.Value n mp) = Map.foldlWithKey' accum1 justada mp
   where
     accum1 ans sym mp2 = Map.foldlWithKey' accum2 ans mp2
       where
         accum2 ans2 tok quantity =
-          P.unionWith
+          PV1.unionWith
             (+)
             ans2
-            (P.singleton (transPolicyID sym) (transAssetName tok) quantity)
-    justada = P.singleton P.adaSymbol P.adaToken n
+            (PV1.singleton (transPolicyID sym) (transAssetName tok) quantity)
+    justada = PV1.singleton PV1.adaSymbol PV1.adaToken n
 
 -- =============================================
 -- translate fileds like DCert, Wdrl, and similar
 
-transDCert :: CC.Crypto c => DCert c -> P.DCert
+transDCert :: CC.Crypto c => DCert c -> PV1.DCert
 transDCert (DCertDeleg (RegKey stkcred)) =
-  P.DCertDelegRegKey (P.StakingHash (transStakeCred stkcred))
+  PV1.DCertDelegRegKey (PV1.StakingHash (transStakeCred stkcred))
 transDCert (DCertDeleg (DeRegKey stkcred)) =
-  P.DCertDelegDeRegKey (P.StakingHash (transStakeCred stkcred))
+  PV1.DCertDelegDeRegKey (PV1.StakingHash (transStakeCred stkcred))
 transDCert (DCertDeleg (Delegate (Delegation stkcred keyhash))) =
-  P.DCertDelegDelegate
-    (P.StakingHash (transStakeCred stkcred))
+  PV1.DCertDelegDelegate
+    (PV1.StakingHash (transStakeCred stkcred))
     (transKeyHash keyhash)
 transDCert (DCertPool (RegPool pp)) =
-  P.DCertPoolRegister (transKeyHash (_poolId pp)) (P.PubKeyHash (P.toBuiltin (transHash (_poolVrf pp))))
+  PV1.DCertPoolRegister (transKeyHash (_poolId pp)) (PV1.PubKeyHash (PV1.toBuiltin (transHash (_poolVrf pp))))
 transDCert (DCertPool (RetirePool keyhash (EpochNo i))) =
-  P.DCertPoolRetire (transKeyHash keyhash) (fromIntegral i)
-transDCert (DCertGenesis _) = P.DCertGenesis
-transDCert (DCertMir _) = P.DCertMir
+  PV1.DCertPoolRetire (transKeyHash keyhash) (fromIntegral i)
+transDCert (DCertGenesis _) = PV1.DCertGenesis
+transDCert (DCertMir _) = PV1.DCertMir
 
-transWdrl :: CC.Crypto crypto => Wdrl crypto -> Map.Map P.StakingCredential Integer
+transWdrl :: CC.Crypto crypto => Wdrl crypto -> Map.Map PV1.StakingCredential Integer
 transWdrl (Wdrl mp) = Map.foldlWithKey' accum Map.empty mp
   where
     accum ans (RewardAcnt _network cred) (Coin n) =
-      Map.insert (P.StakingHash (transStakeCred cred)) n ans
+      Map.insert (PV1.StakingHash (transStakeCred cred)) n ans
 
-getWitVKeyHash :: (CC.Crypto crypto, Typeable kr) => WitVKey kr crypto -> P.PubKeyHash
+getWitVKeyHash :: (CC.Crypto crypto, Typeable kr) => WitVKey kr crypto -> PV1.PubKeyHash
 getWitVKeyHash =
-  P.PubKeyHash
-    . P.toBuiltin
+  PV1.PubKeyHash
+    . PV1.toBuiltin
     . fromShort
     . (\(UnsafeHash x) -> x)
     . (\(KeyHash x) -> x)
     . hashKey
     . (\(WitVKey x _) -> x)
 
-transDataPair :: CC.Crypto c => (DataHash c, Data era) -> (P.DatumHash, P.Datum)
-transDataPair (x, y) = (transDataHash' x, P.Datum (P.dataToBuiltinData (getPlutusData y)))
+transDataPair :: CC.Crypto c => (DataHash c, Data era) -> (PV1.DatumHash, PV1.Datum)
+transDataPair (x, y) = (transDataHash' x, PV1.Datum (PV1.dataToBuiltinData (getPlutusData y)))
 
-transExUnits :: ExUnits -> P.ExBudget
+transExUnits :: ExUnits -> PV1.ExBudget
 transExUnits (ExUnits mem steps) =
-  P.ExBudget (P.ExCPU (fromIntegral steps)) (P.ExMemory (fromIntegral mem))
+  PV1.ExBudget (PV1.ExCPU (fromIntegral steps)) (PV1.ExMemory (fromIntegral mem))
 
-exBudgetToExUnits :: P.ExBudget -> Maybe ExUnits
-exBudgetToExUnits (P.ExBudget (P.ExCPU steps) (P.ExMemory memory)) =
+exBudgetToExUnits :: PV1.ExBudget -> Maybe ExUnits
+exBudgetToExUnits (PV1.ExBudget (PV1.ExCPU steps) (PV1.ExMemory memory)) =
   ExUnits <$> safeFromInteger (toInteger memory)
     <*> safeFromInteger (toInteger steps)
   where
@@ -347,17 +304,19 @@ exBudgetToExUnits (P.ExBudget (P.ExCPU steps) (P.ExMemory memory)) =
 -- ===================================
 -- translate Script Purpose
 
-transScriptPurpose :: CC.Crypto crypto => ScriptPurpose crypto -> P.ScriptPurpose
-transScriptPurpose (Minting policyid) = P.Minting (transPolicyID policyid)
-transScriptPurpose (Spending txin) = P.Spending (txInfoIn' txin)
+transScriptPurpose :: CC.Crypto crypto => ScriptPurpose crypto -> PV1.ScriptPurpose
+transScriptPurpose (Minting policyid) = PV1.Minting (transPolicyID policyid)
+transScriptPurpose (Spending txin) = PV1.Spending (txInfoIn' txin)
 transScriptPurpose (Rewarding (RewardAcnt _network cred)) =
-  P.Rewarding (P.StakingHash (transStakeCred cred))
-transScriptPurpose (Certifying dcert) = P.Certifying (transDCert dcert)
+  PV1.Rewarding (PV1.StakingHash (transStakeCred cred))
+transScriptPurpose (Certifying dcert) = PV1.Certifying (transDCert dcert)
 
 -- ===================================
 
 -- | Compute a Digest of the current transaction to pass to the script
 --   This is the major component of the valContext function.
+--
+--   TODO Make txInfo depend on 'Language'.
 txInfo ::
   forall era tx m.
   ( Era era,
@@ -374,21 +333,21 @@ txInfo ::
   SystemStart ->
   UTxO era ->
   tx ->
-  m P.TxInfo
+  m PV1.TxInfo
 txInfo pp ei sysS utxo tx = do
   timeRange <- transVITime pp ei sysS interval
   pure $
-    P.TxInfo
-      { P.txInfoInputs = mapMaybe (txInfoIn utxo) (Set.toList (inputs' tbody)),
-        P.txInfoOutputs = mapMaybe txInfoOut (foldr (:) [] outs),
-        P.txInfoFee = transValue (inject @(Mary.Value (Crypto era)) fee),
-        P.txInfoMint = transValue forge,
-        P.txInfoDCert = foldr (\c ans -> transDCert c : ans) [] (certs' tbody),
-        P.txInfoWdrl = Map.toList (transWdrl (wdrls' tbody)),
-        P.txInfoValidRange = timeRange,
-        P.txInfoSignatories = map transKeyHash (Set.toList (reqSignerHashes' tbody)),
-        P.txInfoData = map transDataPair datpairs,
-        P.txInfoId = P.TxId (transSafeHash (hashAnnotated @(Crypto era) tbody))
+    PV1.TxInfo
+      { PV1.txInfoInputs = mapMaybe (txInfoIn utxo) (Set.toList (inputs' tbody)),
+        PV1.txInfoOutputs = mapMaybe txInfoOut (foldr (:) [] outs),
+        PV1.txInfoFee = transValue (inject @(Mary.Value (Crypto era)) fee),
+        PV1.txInfoMint = transValue forge,
+        PV1.txInfoDCert = foldr (\c ans -> transDCert c : ans) [] (certs' tbody),
+        PV1.txInfoWdrl = Map.toList (transWdrl (wdrls' tbody)),
+        PV1.txInfoValidRange = timeRange,
+        PV1.txInfoSignatories = map transKeyHash (Set.toList (reqSignerHashes' tbody)),
+        PV1.txInfoData = map transDataPair datpairs,
+        PV1.txInfoId = PV1.TxId (transSafeHash (hashAnnotated @(Crypto era) tbody))
       }
   where
     tbody = getField @"body" tx
@@ -408,10 +367,10 @@ txInfo pp ei sysS utxo tx = do
 --   The UTxO and the PtrMap are used to 'resolve' the TxIn and the StakeRefPtr's
 valContext ::
   Era era =>
-  P.TxInfo ->
+  PV1.TxInfo ->
   ScriptPurpose (Crypto era) ->
   Data era
-valContext txinfo sp = Data (P.toData (P.ScriptContext txinfo (transScriptPurpose sp)))
+valContext txinfo sp = Data (PV1.toData (PV1.ScriptContext txinfo (transScriptPurpose sp)))
 
 data FailureDescription
   = OnePhaseFailure Text
@@ -456,7 +415,7 @@ data PlutusDebug = PlutusDebug
   { debugCostModel :: CostModel,
     debugExUnits :: ExUnits,
     debugScript :: SBS.ShortByteString,
-    debugData :: [P.Data],
+    debugData :: [PV1.Data],
     debugVersion :: Language
   }
   deriving (Show)
@@ -489,8 +448,8 @@ debugPlutus db =
       case decodeFull' bs of
         Left e -> DebugCannotDecode (show e)
         Right (PlutusDebug (CostModel cost) units script ds _version) ->
-          case P.evaluateScriptRestricting
-            P.Verbose
+          case PV1.evaluateScriptRestricting
+            PV1.Verbose
             cost
             (transExUnits units)
             script
@@ -500,7 +459,7 @@ debugPlutus db =
 
 -- The runPLCScript in the Specification has a slightly different type
 -- than the one in the implementation below. Made necessary by the the type
--- of P.evaluateScriptRestricting which is the interface to Plutus, and in the impementation
+-- of PV1.evaluateScriptRestricting which is the interface to Plutus, and in the impementation
 -- we try to track why a script failed (if it does) by the [String] in the Fails constructor of ScriptResut.
 
 -- | Run a Plutus Script, given the script and the bounds on resources it is allocated.
@@ -508,20 +467,25 @@ runPLCScript ::
   forall era.
   Show (Script era) =>
   Proxy era ->
+  Language ->
   CostModel ->
   SBS.ShortByteString ->
   ExUnits ->
-  [P.Data] ->
+  [PV1.Data] ->
   ScriptResult
-runPLCScript proxy (CostModel cost) scriptbytestring units ds =
-  case P.evaluateScriptRestricting
-    P.Quiet
+runPLCScript proxy lang (CostModel cost) scriptbytestring units ds =
+  case plutusInterpreter
+    lang
+    PV1.Quiet
     cost
     (transExUnits units)
     scriptbytestring
     ds of
-    (_, Left e) -> explainPlutusFailure proxy scriptbytestring e ds (CostModel cost) units
+    (_, Left e) -> explainPlutusFailure proxy lang scriptbytestring e ds (CostModel cost) units
     (_, Right ()) -> Passes
+  where
+    plutusInterpreter PlutusV1 = PV1.evaluateScriptRestricting
+    plutusInterpreter PlutusV2 = PV2.evaluateScriptRestricting
 
 -- | Explain why a script might fail. Scripts come in two flavors:
 --
@@ -537,19 +501,20 @@ explainPlutusFailure,
     forall era.
     Show (Script era) =>
     Proxy era ->
+    Language ->
     SBS.ShortByteString ->
-    P.EvaluationError ->
-    [P.Data] ->
+    PV1.EvaluationError ->
+    [PV1.Data] ->
     CostModel ->
     ExUnits ->
     ScriptResult
-explainPlutusFailure _proxy scriptbytestring e ds@[dat, redeemer, info] cm eu =
+explainPlutusFailure _proxy lang scriptbytestring e ds@[dat, redeemer, info] cm eu =
   -- A three data argument script.
   let ss :: Script era
-      ss = PlutusScript scriptbytestring
+      ss = PlutusScript lang scriptbytestring
       name :: String
       name = show ss
-   in case P.fromData info of
+   in case PV1.fromData info of
         Nothing -> Fails [PlutusFailure line db]
           where
             line =
@@ -564,7 +529,7 @@ explainPlutusFailure _proxy scriptbytestring e ds@[dat, redeemer, info] cm eu =
             db = B64.encode . serialize' $ PlutusDebug cm eu scriptbytestring ds PlutusV1
         Just info2 -> Fails [PlutusFailure line db]
           where
-            info3 = show (pretty (info2 :: P.ScriptContext))
+            info3 = show (pretty (info2 :: PV1.ScriptContext))
             line =
               pack $
                 unlines
@@ -575,13 +540,13 @@ explainPlutusFailure _proxy scriptbytestring e ds@[dat, redeemer, info] cm eu =
                     "The context is:\n" ++ info3
                   ]
             db = B64.encode . serialize' $ PlutusDebug cm eu scriptbytestring ds PlutusV1
-explainPlutusFailure _proxy scriptbytestring e ds@[redeemer, info] cm eu =
+explainPlutusFailure _proxy lang scriptbytestring e ds@[redeemer, info] cm eu =
   -- A two data argument script.
   let ss :: Script era
-      ss = PlutusScript scriptbytestring
+      ss = PlutusScript lang scriptbytestring
       name :: String
       name = show ss
-   in case P.fromData info of
+   in case PV1.fromData info of
         Nothing -> Fails [PlutusFailure line db]
           where
             line =
@@ -595,7 +560,7 @@ explainPlutusFailure _proxy scriptbytestring e ds@[redeemer, info] cm eu =
             db = B64.encode . serialize' $ PlutusDebug cm eu scriptbytestring ds PlutusV1
         Just info2 -> Fails [PlutusFailure line db]
           where
-            info3 = show (pretty (info2 :: P.ScriptContext))
+            info3 = show (pretty (info2 :: PV1.ScriptContext))
             line =
               pack $
                 unlines
@@ -605,12 +570,12 @@ explainPlutusFailure _proxy scriptbytestring e ds@[redeemer, info] cm eu =
                     "The context is:\n" ++ info3
                   ]
             db = B64.encode . serialize' $ PlutusDebug cm eu scriptbytestring ds PlutusV1
-explainPlutusFailure _proxy scriptbytestring e ds cm eu =
+explainPlutusFailure _proxy lang scriptbytestring e ds cm eu =
   -- A script with the wrong number of arguments
   Fails [PlutusFailure line db]
   where
     ss :: Script era
-    ss = PlutusScript scriptbytestring
+    ss = PlutusScript lang scriptbytestring
     name :: String
     name = show ss
     line =
@@ -626,18 +591,19 @@ explainPlutusFailure _proxy scriptbytestring e ds cm eu =
 explain_plutus_failure = explainPlutusFailure
 {-# DEPRECATED explain_plutus_failure "In favor of properly named `explainPlutusFailure`" #-}
 
-validPlutusdata :: P.Data -> Bool
-validPlutusdata (P.Constr _n ds) = all validPlutusdata ds
-validPlutusdata (P.Map ds) =
+validPlutusdata :: PV1.Data -> Bool
+validPlutusdata (PV1.Constr _n ds) = all validPlutusdata ds
+validPlutusdata (PV1.Map ds) =
   all (\(x, y) -> validPlutusdata x && validPlutusdata y) ds
-validPlutusdata (P.List ds) = all validPlutusdata ds
-validPlutusdata (P.I _n) = True
-validPlutusdata (P.B bs) = BS.length bs <= 64
+validPlutusdata (PV1.List ds) = all validPlutusdata ds
+validPlutusdata (PV1.I _n) = True
+validPlutusdata (PV1.B bs) = BS.length bs <= 64
 
 -- | Test that every Alonzo script represents a real Script.
 --     Run deepseq to see that there are no infinite computations and that
---     every Plutus Script unflattens into a real P.Script
+--     every Plutus Script unflattens into a real PV1.Script
 validScript :: Script era -> Bool
 validScript scrip = case scrip of
   TimelockScript sc -> deepseq sc True
-  PlutusScript bytes -> P.validateScript bytes
+  PlutusScript PlutusV1 bytes -> PV1.validateScript bytes
+  PlutusScript PlutusV2 bytes -> PV2.validateScript bytes

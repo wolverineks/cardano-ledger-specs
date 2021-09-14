@@ -16,7 +16,7 @@ import Cardano.Binary (ToCBOR (toCBOR), serializeEncoding')
 import Cardano.Ledger.Address (Addr (..))
 import Cardano.Ledger.Alonzo (AlonzoEra)
 import Cardano.Ledger.Alonzo.Data as Alonzo (AuxiliaryData (..), Data (..), DataHash)
-import Cardano.Ledger.Alonzo.Language (Language (PlutusV1))
+import Cardano.Ledger.Alonzo.Language (Language (..))
 import Cardano.Ledger.Alonzo.PParams (PParams' (..))
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo (PParams, extendPP, retractPP)
 import Cardano.Ledger.Alonzo.PlutusScriptApi (scriptsNeededFromBody)
@@ -215,16 +215,16 @@ instance CC.Crypto c => ScriptClass (AlonzoEra c) where
   -- basescript _ key = TimelockScript (basescript (Proxy @(MaryEra c)) key) -- The old style from Mary
   basescript proxy key = (someLeaf proxy key)
   isKey _ (TimelockScript x) = isKey (Proxy @(MaryEra c)) x
-  isKey _ (PlutusScript _) = Nothing
+  isKey _ (PlutusScript _ _) = Nothing
   isOnePhase _ (TimelockScript _) = True
-  isOnePhase _ (PlutusScript _) = False
+  isOnePhase _ (PlutusScript _ _) = False
   quantify _ (TimelockScript x) = fmap TimelockScript (quantify (Proxy @(MaryEra c)) x)
   quantify _ x = Leaf x
   unQuantify _ quant = TimelockScript $ unQuantify (Proxy @(MaryEra c)) (fmap unTime quant)
 
 unTime :: Alonzo.Script era -> Timelock (Crypto era)
 unTime (TimelockScript x) = x
-unTime (PlutusScript _) = error "Plutus in Timelock"
+unTime (PlutusScript _ _) = error "Plutus in Timelock"
 
 okAsCollateral :: forall c. Mock c => UTxO (AlonzoEra c) -> TxIn c -> Bool
 okAsCollateral utxo inputx =

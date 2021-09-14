@@ -178,7 +178,7 @@ collectTwoPhaseScriptInputs ei sysS pp tx utxo =
     -- on 1-phase scripts.
     knownToNotBe1Phase (_, sh) =
       case sh `Map.lookup` txscripts' (getField @"wits" tx) of
-        Just (AlonzoScript.PlutusScript _) -> True
+        Just (AlonzoScript.PlutusScript _ _) -> True
         Just (AlonzoScript.TimelockScript _) -> False
         Nothing -> True
     redeemer (sp, _) =
@@ -211,7 +211,7 @@ merge f (x : xs) (y : ys) zs = merge f xs ys (gg x y zs)
     gg (Left a) (Left b) (Left cs) = Left (a : b : cs)
 
 language :: AlonzoScript.Script era -> Maybe Language
-language (AlonzoScript.PlutusScript _) = Just PlutusV1
+language (AlonzoScript.PlutusScript lang _) = Just lang
 language (AlonzoScript.TimelockScript _) = Nothing
 
 -- | evaluate a list of scripts, All scripts in the list must be True.
@@ -236,8 +236,8 @@ evalScripts tx ((AlonzoScript.TimelockScript timelock, _, _, _) : rest) =
     vhks = Set.map witKeyHash (txwitsVKey' (getField @"wits" tx))
     lift True = Passes
     lift False = Fails [OnePhaseFailure . pack . show $ timelock]
-evalScripts tx ((AlonzoScript.PlutusScript pscript, ds, units, cost) : rest) =
-  runPLCScript (Proxy @era) cost pscript units (map getPlutusData ds)
+evalScripts tx ((AlonzoScript.PlutusScript lang pscript, ds, units, cost) : rest) =
+  runPLCScript (Proxy @era) lang cost pscript units (map getPlutusData ds)
     `andResult` evalScripts tx rest
 
 -- Collect information (purpose and hash) about all the scripts in a Tx.

@@ -29,7 +29,7 @@ import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Crypto as CC (Crypto)
 import Cardano.Slotting.EpochInfo.API (EpochInfo)
 import Cardano.Slotting.Time (SystemStart)
-import Data.Array (Array, (!))
+import Data.Array (Array, bounds, (!))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import GHC.Records (HasField (..))
@@ -57,6 +57,8 @@ data ScriptFailure c
   | -- | The execution budget that was calculated by the Plutus
     --  evaluator is out of bounds.
     IncompatibleBudget P.ExBudget
+  | -- | There was no cost model for given version of Plutus
+    NoCostModel Language
   deriving (Show)
 
 note :: e -> Maybe a -> Either e a
@@ -101,15 +103,13 @@ evaluateTransactionExecutionUnits pp tx utxo ei sysS costModels = do
       msb <- case Map.lookup sh scripts of
         Nothing -> pure Nothing
         Just (TimelockScript _) -> []
-        Just (PlutusScript bytes) -> pure $ Just bytes
+        Just (PlutusScript v bytes) -> pure $ Just (bytes, v)
       pointer <- case rdptr @(AlonzoEra c) txb sp of
         SNothing -> []
         -- Since scriptsNeeded used the transaction to create script purposes,
         -- it would be a logic error if rdptr was not able to find sp.
         SJust p -> pure p
       pure (pointer, (sp, msb))
-
-    (CostModel costModel) = costModels ! PlutusV1
 
     findAndCount ::
       P.TxInfo ->
@@ -118,7 +118,10 @@ evaluateTransactionExecutionUnits pp tx utxo ei sysS costModels = do
       Either (ScriptFailure c) ExUnits
     findAndCount inf pointer (rdmr, _) = do
       (sp, mscript) <- note (RedeemerNotNeeded pointer) $ Map.lookup pointer ptrToPlutusScript
-      script <- note (MissingScript pointer) mscript
+      (script, lang) <- note (MissingScript pointer) mscript
+      let (l1, l2) = bounds costModels
+      (CostModel costModel) <-
+        if l1 <= lang && lang <= l2 then Right (costModels ! lang) else Left (NoCostModel lang)
       args <- case sp of
         (Spending txin) -> do
           txOut <- note (UnknownTxIn txin) $ Map.lookup txin (unUTxO utxo)

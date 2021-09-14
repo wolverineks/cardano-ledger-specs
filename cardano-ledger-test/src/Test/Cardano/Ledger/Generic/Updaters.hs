@@ -152,9 +152,9 @@ instance forall c. CC.Crypto c => HasTokens (AlonzoEra c) where
 unTime :: CC.Crypto (Crypto era) => Proof era -> (Proof era -> Script era) -> Timelock (Crypto era)
 unTime wit f = case f wit of
   (TimelockScript x) -> x
-  (PlutusScript "\SOH\NUL\NUL \ACK\SOH") -> (RequireAnyOf mempty)
-  (PlutusScript "\SOH\NUL\NUL \STX\NUL\NUL\DC1") -> (RequireAllOf mempty)
-  (PlutusScript _) -> error ("Plutus script in Timelock context")
+  (PlutusScript _ "\SOH\NUL\NUL \ACK\SOH") -> (RequireAnyOf mempty)
+  (PlutusScript _ "\SOH\NUL\NUL \STX\NUL\NUL\DC1") -> (RequireAllOf mempty)
+  (PlutusScript _ _) -> error ("Plutus script in Timelock context")
 
 instance CC.Crypto c => Scriptic (AlonzoEra c) where
   never n (Alonzo _) = alwaysFails n -- always False

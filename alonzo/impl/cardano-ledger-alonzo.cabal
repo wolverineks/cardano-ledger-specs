@@ -51,6 +51,7 @@ library
     Cardano.Ledger.Alonzo.TxSeq
     Cardano.Ledger.Alonzo.TxWitness
     Cardano.Ledger.DescribeEras
+    Fake.Plutus.V2.Ledger.Api
   build-depends:
     array,
     base-deriving-via,

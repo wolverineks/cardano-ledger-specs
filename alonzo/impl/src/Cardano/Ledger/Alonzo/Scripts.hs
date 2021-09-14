@@ -82,10 +82,11 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import Data.Typeable
 import Data.Word (Word64, Word8)
+import Fake.Plutus.V2.Ledger.Api as PV2 hiding (Script)
 import GHC.Generics (Generic)
 import NoThunks.Class (InspectHeapNamed (..), NoThunks)
 import Numeric.Natural (Natural)
-import Plutus.V1.Ledger.Api (defaultCostModelParams, validateCostModelParams)
+import Plutus.V1.Ledger.Api as PV1 hiding (Script)
 import qualified Plutus.V1.Ledger.Examples as Plutus
   ( alwaysFailingNAryFunction,
     alwaysSucceedingNAryFunction,
@@ -112,12 +113,12 @@ instance NoThunks Tag
 -- | Scripts in the Alonzo Era, Either a Timelock script or a Plutus script.
 data Script era
   = TimelockScript (Timelock (Crypto era))
-  | PlutusScript ShortByteString -- A Plutus.V1.Ledger.Scripts(Script) that has been 'CBOR' encoded
+  | PlutusScript Language ShortByteString
   deriving (Eq, Generic, Ord)
 
 instance (ValidateScript era, Core.Script era ~ Script era) => Show (Script era) where
   show (TimelockScript x) = "TimelockScript " ++ show x
-  show s@(PlutusScript _) = "PlutusScript " ++ show (hashScript @era s)
+  show s@(PlutusScript v _) = "PlutusScript " ++ show v ++ " " ++ show (hashScript @era s)
 
 deriving via
   InspectHeapNamed "Script" (Script era)
@@ -129,14 +130,14 @@ instance NFData (Script era)
 -- | Both constructors know their original bytes
 instance SafeToHash (Script era) where
   originalBytes (TimelockScript t) = originalBytes t
-  originalBytes (PlutusScript bs) = fromShort bs
+  originalBytes (PlutusScript _ bs) = fromShort bs
 
 alwaysSucceeds, alwaysFails :: Natural -> Script era
-alwaysSucceeds n = PlutusScript (Plutus.alwaysSucceedingNAryFunction n)
-alwaysFails n = PlutusScript (Plutus.alwaysFailingNAryFunction n)
+alwaysSucceeds n = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction n)
+alwaysFails n = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction n)
 
 isPlutusScript :: Script era -> Bool
-isPlutusScript (PlutusScript _) = True
+isPlutusScript (PlutusScript _ _) = True
 isPlutusScript (TimelockScript _) = False
 
 -- ===========================================
@@ -186,28 +187,36 @@ instance NoThunks CostModel
 
 instance NFData CostModel
 
-checkCostModel :: Map Text Integer -> Either String CostModel
-checkCostModel cm =
-  if validateCostModelParams cm
+checkCostModel :: Language -> Map Text Integer -> Either String CostModel
+checkCostModel PlutusV1 cm =
+  if PV1.validateCostModelParams cm
     then Right (CostModel cm)
-    else Left ("Invalid cost model: " ++ show cm)
+    else Left ("Invalid PlutusV1 cost model: " ++ show cm)
+checkCostModel PlutusV2 cm =
+  if PV2.validateCostModelParams cm
+    then Right (CostModel cm)
+    else Left ("Invalid PlutusV2 cost model: " ++ show cm)
 
-{-# DEPRECATED defaultCostModel "Use 'import Test.Cardano.Ledger.Alonzo.PlutusScripts' instead." #-}
-defaultCostModel :: Maybe CostModel
-defaultCostModel = CostModel <$> defaultCostModelParams
+defaultCostModel :: Language -> Maybe CostModel
+defaultCostModel PlutusV1 = CostModel <$> PV1.defaultCostModelParams
+defaultCostModel PlutusV2 = CostModel <$> PV2.defaultCostModelParams
 
 decodeCostModelMap :: Decoder s (Map Language CostModel)
 decodeCostModelMap = decodeMapByKey fromCBOR decodeCostModel
 
 decodeCostModel :: Language -> Decoder s CostModel
-decodeCostModel PlutusV1 =
-  case defaultCostModelParams of
+decodeCostModel lang =
+  case dcmps of
     Nothing -> fail "Default Plutus Cost Model is corrupt."
     Just dcm -> do
-      checked <- checkCostModel <$> decodeArrayAsMap (Map.keysSet dcm) fromCBOR
+      checked <- checkCostModel lang <$> decodeArrayAsMap (Map.keysSet dcm) fromCBOR
       case checked of
         Left e -> fail e
         Right cm -> pure cm
+  where
+    dcmps = case lang of
+      PlutusV1 -> PV1.defaultCostModelParams
+      PlutusV2 -> PV2.defaultCostModelParams
 
 decodeArrayAsMap :: Ord a => Set a -> Decoder s b -> Decoder s (Map a b)
 decodeArrayAsMap keys decodeValue = do
@@ -294,7 +303,8 @@ instance forall era. (Typeable (Crypto era), Typeable era) => ToCBOR (Script era
 
 encodeScript :: (Typeable (Crypto era)) => Script era -> Encode 'Open (Script era)
 encodeScript (TimelockScript i) = Sum TimelockScript 0 !> To i
-encodeScript (PlutusScript s) = Sum PlutusScript 1 !> To s -- Use the ToCBOR instance of ShortByteString
+encodeScript (PlutusScript PlutusV1 s) = Sum (PlutusScript PlutusV1) 1 !> To s -- Use the ToCBOR instance of ShortByteString
+encodeScript (PlutusScript PlutusV2 s) = Sum (PlutusScript PlutusV1) 2 !> To s
 
 instance
   (CC.Crypto (Crypto era), Typeable (Crypto era), Typeable era) =>
@@ -304,7 +314,8 @@ instance
     where
       decodeScript :: Word -> Decode 'Open (Annotator (Script era))
       decodeScript 0 = Ann (SumD TimelockScript) <*! From
-      decodeScript 1 = Ann (SumD PlutusScript) <*! Ann From
+      decodeScript 1 = Ann (SumD $ PlutusScript PlutusV1) <*! Ann From
+      decodeScript 2 = Ann (SumD $ PlutusScript PlutusV2) <*! Ann From
       decodeScript n = Invalid n
 
 -- ============================================================
@@ -316,7 +327,7 @@ ppTag x = ppString (show x)
 instance PrettyA Tag where prettyA = ppTag
 
 ppScript :: forall era. (ValidateScript era, Core.Script era ~ Script era) => Script era -> PDoc
-ppScript s@(PlutusScript _) = ppString "PlutusScript " PP.<+> ppScriptHash (hashScript @era s)
+ppScript s@(PlutusScript v _) = ppString ("PlutusScript " <> show v <> " ") PP.<+> ppScriptHash (hashScript @era s)
 ppScript (TimelockScript x) = ppTimelock x
 
 instance (ValidateScript era, Core.Script era ~ Script era) => PrettyA (Script era) where prettyA = ppScript

@@ -24,7 +24,9 @@ import NoThunks.Class (NoThunks)
 -- For now, the only Non-Native Scriting language is Plutus
 -- We might add new languages in the futures.
 
-data Language = PlutusV1 --    | ADD-NEW-LANGUAGES-HERE
+data Language
+  = PlutusV1
+  | PlutusV2
   deriving (Eq, Generic, Show, Ord, Enum, Bounded, Ix)
 
 instance NoThunks Language
@@ -33,20 +35,23 @@ instance NFData Language
 
 instance ToCBOR Language where
   toCBOR PlutusV1 = toCBOR (0 :: Int)
+  toCBOR PlutusV2 = toCBOR (1 :: Int)
 
 instance FromCBOR Language where
   fromCBOR = do
     n <- decodeWord64
     case n of
       0 -> pure PlutusV1
+      1 -> pure PlutusV2
       m -> invalidKey (fromIntegral m)
 
 nonNativeLanguages :: Set.Set Language
-nonNativeLanguages = Set.singleton PlutusV1
+nonNativeLanguages = Set.fromList [PlutusV1, PlutusV2]
 
 -- ==================================
 
 ppLanguage :: Language -> PDoc
 ppLanguage PlutusV1 = ppString "PlutusV1"
+ppLanguage PlutusV2 = ppString "PlutusV2"
 
 instance PrettyA Language where prettyA = ppLanguage

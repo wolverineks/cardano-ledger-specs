@@ -129,7 +129,7 @@ instance (CC.Crypto c) => Shelley.ValidateScript (AlonzoEra c) where
       then "\x01"
       else nativeMultiSigTag -- "\x00"
   validateScript (TimelockScript script) tx = validateTimelock @(AlonzoEra c) script tx
-  validateScript (PlutusScript _) _tx = True
+  validateScript (PlutusScript _ _) _tx = True
 
 -- To run a PlutusScript use Cardano.Ledger.Alonzo.TxInfo(runPLCScript)
 -- To run any Alonzo Script use Cardano.Ledger.Alonzo.PlutusScriptApi(evalScripts)
