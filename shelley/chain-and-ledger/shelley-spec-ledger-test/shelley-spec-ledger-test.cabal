@@ -47,7 +47,6 @@ library
     Test.Shelley.Spec.Ledger.BenchmarkFunctions
     Test.Shelley.Spec.Ledger.BeTreeTests
     Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
-    Test.Shelley.Spec.Ledger.CompactMap
     Test.Shelley.Spec.Ledger.Examples.Cast
     Test.Shelley.Spec.Ledger.Examples.Consensus
     Test.Shelley.Spec.Ledger.Generator.Block
@@ -88,7 +87,6 @@ library
       Test.Shelley.Spec.Ledger.Rules.TestPoolreap
       Test.Shelley.Spec.Ledger.ShelleyTranslation
   build-depends:
-    array,
     base16-bytestring >= 1,
     bytestring,
     cardano-binary,

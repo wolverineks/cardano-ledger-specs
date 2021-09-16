@@ -39,6 +39,7 @@ import Cardano.Binary
     peekTokenType,
     toCBOR,
   )
+import Cardano.Prelude (HeapWords(..))  
 import qualified Cardano.Crypto.Hash.Class as Hash
 import Cardano.Ledger.Coin (Coin (..), integerToWord64)
 import Cardano.Ledger.Compactible (Compactible (..))
@@ -363,6 +364,13 @@ data CompactValue crypto
       {-# UNPACK #-} !Word32 -- number of ma's
       {-# UNPACK #-} !ShortByteString -- rep
   deriving (Show, Typeable)
+
+instance HeapWords (CompactValue crypto) where
+   heapWords (CompactValueAdaOnly _) = 2
+   heapWords (CompactValueMultiAsset _ _ bytes) = 3 + heapWords bytes
+
+instance HeapWords (CompactForm (Value crypto)) where
+   heapWords (CompactValue x) = heapWords x
 
 instance CC.Crypto crypto => Eq (CompactValue crypto) where
   a == b = from a == from b

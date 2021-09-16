@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
--- {-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
@@ -8,13 +7,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 
-module Test.Shelley.Spec.Ledger.CompactMap where
+module  Test.Cardano.Ledger.Alonzo.CompactMap where
 
 import Cardano.Binary
   ( ToCBOR(..),
+    FromCBOR(..),
     serialize',
     Encoding,
+    unsafeDeserialize',
   )
 
 
@@ -27,6 +29,7 @@ import Shelley.Spec.Ledger.TxBody(TxOut(..))
 import Shelley.Spec.Ledger.CompactAddr(CompactAddr(..))
 
 import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Alonzo (AlonzoEra)
 import Cardano.Ledger.Shelley (ShelleyEra)
 import Cardano.Ledger.SafeHash(extractHash)
 import Cardano.Crypto.Hash.Class(Hash(..))
@@ -70,21 +73,164 @@ import qualified Data.Array as A
 import Data.ByteString (ByteString)
 import Data.Text(Text,pack)
 
-import Data.Primitive.Types(Prim(..), defaultSetByteArray#, defaultSetOffAddr# )
-import Data.Primitive.PrimArray(PrimArray,primArrayFromList)
 
--- import Debug.Trace
+import Test.Cardano.Ledger.ShelleyMA.Serialisation.Generators() -- Arbitrary instance Value
+import Cardano.Ledger.Mary.Value(Value(..)) -- HeapWords instance CompactValue
+import Cardano.Ledger.Compactible (Compactible (..))
+import qualified Cardano.Ledger.DescribeEras as E(Witness(..))
+import Cardano.Ledger.Era(Era,Crypto)
+import qualified Cardano.Ledger.Core as Core(Value)
+import Test.QuickCheck.Gen(frequency,vectorOf)
+import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Val(Val(..))
+
+
+import Data.Primitive.Types(Prim(..), defaultSetByteArray#, defaultSetOffAddr# )
+import Data.Primitive.PrimArray -- (PrimArray,primArrayFromList)
+import Control.Monad.Primitive
+import Data.List(sort,sortBy)
+import Control.Monad.ST(runST,ST)
+import Data.Foldable(foldl')
+import qualified Data.Array.MArray as MutA
+import Data.Array.ST(STArray)
+
+
+import Debug.Trace
 -- import Test.Tasty
 -- import Cardano.Binary.Deserialize(unsafeDeserialize)
 -- import Shelley.Spec.Ledger.UTxO(UTxO(..))
 -- import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C,C_Crypto)
--- import Cardano.Ledger.Era(Crypto)
 -- import qualified Data.ByteString as BS
 -- import Data.ByteString.Conversion.From(FromByteString(parser),runParser)
 -- import qualified Data.Vector.Generic as VGen
 -- import qualified Data.Vector.Unboxed as VUnbox
 -- import Data.Primitive.ByteArray
 
+
+withSTArray :: Int -> (forall s. STArray s Int a -> ST s x) -> (A.Array Int a,x)
+withSTArray size process = runST $ do
+   marr <- MutA.newArray_ (0,size - 1)
+   x <- process marr
+   arr <- MutA.freeze marr
+   pure(arr,x)
+
+withPrimArray :: Prim a => Int -> (forall s. MutablePrimArray s a -> ST s x) -> (PrimArray a,x)
+withPrimArray size process = runST $ do
+   marr <- newPrimArray size
+   x <- process marr
+   arr <- unsafeFreezePrimArray marr
+   pure(arr,x)
+
+withBoth ::
+   Prim a =>
+   Int ->
+   Int ->
+   (forall s. MutablePrimArray s a -> STArray s Int b -> ST s ()) ->
+   (PrimArray a, A.Array Int b)
+withBoth primsize normsize process = runST $ do
+   arr1 <- newPrimArray primsize
+   arr2 <- MutA.newArray_ (0,normsize - 1)
+   process arr1 arr2
+   arr3 <- unsafeFreezePrimArray arr1
+   arr4 <- MutA.freeze arr2
+   pure(arr3,arr4)
+
+
+-- | If the 'group' is full, serialise it, and then write it to 'arr' a index 'i'
+--   Aways return the next index and the next group. Most times the group grows
+--   but the index says the same. The index grows only when the group becomes full.
+writegroup:: ToCBOR v => Int -> [v] -> STArray s Int ByteString -> Int -> v -> ST s ([v], Int)
+writegroup groupsize group arr i v  = do
+   let group2 = v : group
+   if length group2 == groupsize
+      then do MutA.writeArray arr i (serialize' (reverse group2))
+              pure ([],i+1)
+      else pure (group2,i)
+
+readFromGroup :: forall v. FromCBOR v => Int -> A.Array Int ByteString -> Int -> v
+readFromGroup groupsize arr i =  (vals !! (i `mod` groupsize))
+  where vals :: [ v ]
+        vals = unsafeDeserialize' (index arr (i `div` groupsize))
+       
+
+flush :: forall a v. (ToCBOR v,Ord a, Prim a) =>
+         Int -> PrimArray a -> A.Array Int ByteString -> [(a,v)] -> (PrimArray a,A.Array Int ByteString)
+flush groupsize keys values list = withBoth newsize normsize process where
+   oldsize = sizeofPrimArray keys
+   newsize = oldsize + foldl' (accumSize keys) 0 (map fst list)
+   normsize = if newsize `mod` groupsize == 0
+                 then newsize `div` groupsize
+                 else (newsize `div` groupsize) + 1
+   sortedlist = sortBy (\ x y -> compare (fst x) (fst y)) list
+   process :: forall s. MutablePrimArray s a -> STArray s Int ByteString -> ST s ()
+   process mkeys mvalues = loop 0 0 0 sortedlist [] 
+     where loop i next nextg xs group = 
+            case (i < oldsize, next < newsize, xs) of
+              (True,True,((x,v):ys)) ->
+                do let y = indexPrimArray keys i
+                   case compare x y of
+                     EQ -> do writePrimArray mkeys next x
+                              (group2,nextg2) <- writegroup groupsize group mvalues nextg v
+                              loop (i+1) (next+1) nextg2 ys group2
+                     LT -> do writePrimArray mkeys next x
+                              loop i (next+1) nextg ys group 
+                     GT -> do writePrimArray mkeys next y
+                              loop (i+1) (next+1) nextg ys group
+              (True,True,[]) ->
+                 copyPrimArray mkeys next keys i (oldsize - i)
+              (False,True,((x,v):xs)) ->
+                do writePrimArray mkeys next x
+                   loop i (next+1) nextg xs group
+              -- This case should only happen when we have run out of things to process
+              -- (i >= oldsize), so there is nothing left to copy from 'arr'
+              -- or xs is null , so there is nothing left to copy from 'list'
+              other -> pure ()
+     
+
+-- =========================================
+
+accumSize :: (Ord k, Indexable arr k, Num p) => arr k -> p -> k -> p
+accumSize arr ans key  =
+  case binsearch 0 (isize arr - 1) key arr of { Just _ -> ans ; _ -> ans+1 }
+
+
+-- | Merge 'list' (of type [a]) into 'arr' (a sorted (PrimArray a)) creating a new (PrimArray a)
+--   The 'arr' should be sorted, and then the result will be sorted.
+mergePrimArray :: forall a. (Ord a, Prim a) => PrimArray a -> [a] -> PrimArray a
+mergePrimArray arr list = arr2 where
+   (arr2,_) = withPrimArray newsize process
+   oldsize = sizeofPrimArray arr
+   newsize = oldsize + foldl' (accumSize arr) 0 list
+   sortedlist = sort list
+   process :: forall s. MutablePrimArray s a -> ST s ()
+   process mutarr = do
+       let loop i next xs = 
+            case (i < oldsize, next < newsize, xs) of
+              (True,True,(x:xs)) ->
+                do let y = indexPrimArray arr i
+                   case compare x y of
+                     EQ -> do writePrimArray mutarr next x
+                              loop (i+1) (next+1) xs
+                     LT -> do writePrimArray mutarr next x
+                              loop i (next+1) xs
+                     GT -> do writePrimArray mutarr next y
+                              loop (i+1) (next+1) (x:xs)
+              (True,True,[]) ->
+                copyPrimArray mutarr next arr i (oldsize - i)
+              (False,True,(x:xs)) ->
+                do writePrimArray mutarr next x
+                   loop i (next+1) xs
+              -- This case should only happen when we have run out of things to process
+              -- (i >= oldsize), so there is nothing left to copy from 'arr'
+              -- or xs is null , so there is nothing left to copy from 'list'
+              other -> pure ()
+       loop 0 0 sortedlist
+   
+t21 = primArrayFromList [3,6,9,12::Int]
+
+test :: [Int] -> PrimArray Int
+test xs = mergePrimArray t21 xs
+  
 
 -- ==========================================
 
@@ -224,19 +370,66 @@ instance (HeapWords k, HeapWords v) => HeapWords (ParVector k v) where
   heapWords (ParVector k v) =  (3 + hwk + hwv)
       where hwk = heapWords k
             hwv = heapWords v 
-            
+
 
 -- ==================================================
 
-type Shelley = ShelleyEra StandardCrypto
+type Alonzo = -- ShelleyEra StandardCrypto
+              AlonzoEra StandardCrypto
+
+percent :: Integral n => n -> n -> String
+percent new old = show(round((fromIntegral new / fromIntegral old)*100 :: Double))++"%"
 
 
-main :: IO ()
-main = do
-  pairs <- generate (vector 100000 :: Gen [(TxIn StandardCrypto,TxOut Shelley)])
+hasTokens :: E.Witness era -> TxOut era -> Bool
+hasTokens E.Alonzo (TxOutCompact _ x) = case fromCompact x of (Value _ m) -> not (Map.null m)
+hasTokens E.Mary (TxOutCompact _ x) = case fromCompact x of (Value _ m) -> not (Map.null m)
+hasTokens _ _ = False
+
+tokenSize :: E.Witness era -> Int -> TxOut era -> Int
+tokenSize E.Shelley ans x = ans
+tokenSize E.Allegra ans x = ans
+tokenSize E.Mary ans (TxOutCompact _ x) =
+  case fromCompact x of
+    (Value _ m) -> if Map.null m then ans else heapWords x + ans - 1
+tokenSize E.Alonzo ans (TxOutCompact _ x) =
+  case fromCompact x of
+    (Value _ m) -> if Map.null m then ans else heapWords x + ans - 1
+
+serialTxOut:: E.Witness era -> TxOut era -> ByteString
+serialTxOut E.Shelley (txout@(TxOutCompact _ _)) = serialize' txout
+serialTxOut E.Allegra (txout@(TxOutCompact _ _)) = serialize' txout
+serialTxOut E.Mary (txout@(TxOutCompact _ _)) = serialize' txout
+serialTxOut E.Alonzo (txout@(TxOutCompact _ _)) = serialize' txout
+
+ 
+
+genTxOut :: E.Witness era -> Int -> Gen (TxOut era)
+genTxOut E.Alonzo percent =
+   TxOut <$> arbitrary
+         <*> frequency [(percent,arbitrary),((100 - percent), inject <$> arbitrary)]
+genTxOut E.Mary percent =
+   TxOut <$> arbitrary
+         <*> frequency [(percent,arbitrary),((100 - percent), inject <$> arbitrary)]
+genTxOut E.Shelley percent =
+   TxOut <$> arbitrary
+         <*> frequency [(percent,arbitrary),((100 - percent), inject <$> arbitrary)]
+genTxOut E.Allegra percent =
+   TxOut <$> arbitrary
+         <*> frequency [(percent,arbitrary),((100 - percent), inject <$> arbitrary)]        
+
+
+
+main :: forall era.
+  ( Era era,
+    ToCBOR (Core.Value era),
+    HeapWords (CompactForm (Core.Value era))
+  ) => E.Witness era -> IO ()
+main wit = do
+  pairs <- generate (vectorOf 100000 ((,) <$> arbitrary <*> genTxOut wit 1))
   let m = Map.fromList pairs
       withnewkeys = Map.mapKeys txInToTT m
-      m2 = Map.map serialTxOut $ withnewkeys
+      m2 = Map.map (serialTxOut wit) $ withnewkeys
       pm = toPar m2
       pm2 = toPar2 30 withnewkeys
       keys = Set.fromList $ map fst (take 100 pairs)
@@ -244,15 +437,20 @@ main = do
       compact = (heapWords(initMap m keys))
       par = (heapWords pm)
       par2 = (heapWords pm2)
+      tokens = Map.foldl' (\ ans txout -> if hasTokens wit txout then ans+1 else ans) (0::Int) m
+      totaltokenwords = Map.foldl' (tokenSize wit) 0 m
       
-  putStrLn (unlines ["Size "++show(Map.size m)++" entries "++show(Map.size m2)
+  putStrLn (unlines [show wit++" Era."
+                    ,"Size "++show(Map.size m)++" entries "++show(Map.size m2)
+                    ,"Number of entries with Tokens = "++show tokens++"  "++ percent tokens (Map.size m) ++
+                       " of entries have tokens,  total words from tokens "++show  totaltokenwords
                     ,"Normal  "++show norm++" words"
                     ,"Compact "++show compact++" words"
-                    ,"Percent " ++show((fromIntegral compact / fromIntegral norm)*100 :: Double)
+                    ,"Percent " ++ percent compact norm
                     ,"Parallel "++show par++" words"
-                    ,"Percent " ++show((fromIntegral par / fromIntegral norm)*100 :: Double)
+                    ,"Percent " ++percent par norm
                     ,"Parallel2 "++show par2++" words"
-                    ,"Percent " ++show((fromIntegral par2 / fromIntegral norm)*100 :: Double)
+                    ,"Percent " ++percent par2 norm
                     ])
 
 
@@ -265,21 +463,23 @@ aa = do txin <- generate (arbitrary :: Gen (TxIn  StandardCrypto))
           _ -> putStrLn ("BAD ") >> pure( bytes,[],Short.length bytes)
 
 bb :: IO (Int, Int)
-bb = do txouts <- generate (vector 10 :: Gen [(TxOut Shelley)])
+bb = do txouts <- generate (vector 10 :: Gen [(TxOut Alonzo)])
         putStrLn (show(toCBOR txouts))
         putStrLn ""
         putStrLn (unlines (map (show . toCBOR) txouts))
         pure (heapWords (serialize' txouts), foldr (\ x ans -> heapWords (serialize' x) + ans) 0 txouts)
 
 cc :: IO Encoding
-cc = do txouts <- generate (vector 4 :: Gen [(TxOut Shelley)])
+cc = do txouts <- generate (vector 4 :: Gen [(TxOut Alonzo)])
         pure(toCBOR txouts)
+ 
+dd =  -- Average 12 Tokens per Value
+   do l <- generate (vector 100 :: Gen [TxOut Alonzo])
+      let baz :: TxOut Alonzo -> Int
+          baz (TxOut _ (Value _ mm)) = Map.size mm
+      pure(fmap baz l)
 
 -- =======================================
-
-
-serialTxOut:: TxOut Shelley -> ByteString
-serialTxOut (TxOutCompact a b) = serialize' (a,b)
 
 foo :: TxOut era -> Short.ShortByteString
 foo (TxOutCompact (UnsafeCompactAddr bytes1) _) = bytes1
@@ -293,3 +493,4 @@ ex4 = insert2 12 (pack "99") ex3
 
 instance Exp Text where
   plus x y = x <> y
+
