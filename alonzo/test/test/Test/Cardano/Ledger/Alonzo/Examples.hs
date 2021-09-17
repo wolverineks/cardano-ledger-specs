@@ -58,7 +58,7 @@ directPlutusTest expectation script ds =
     evalWithTightBudget :: ShortByteString -> [P.Data] -> Either P.EvaluationError ()
     evalWithTightBudget scr datums = do
       budget <- snd $ P.evaluateScriptCounting P.Quiet costModel scr datums
-      snd $ P.evaluateScriptRestricting P.Verbose costModel budget scr datums
+      void $ snd $ P.evaluateScriptRestricting P.Verbose costModel budget scr datums
 
 -- | Expects 3 args (data, redeemer, context)
 guessTheNumber3 :: ShortByteString
