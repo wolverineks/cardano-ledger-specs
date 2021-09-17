@@ -29,7 +29,7 @@ import Cardano.Ledger.Val (DecodeMint, DecodeNonNegative, EncodeMint, Val)
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy)
 import GHC.Records (HasField)
-import Shelley.Spec.Ledger.CompactAddr (CompactAddr)
+import Cardano.Ledger.Shelley.CompactAddr (CompactAddr)
 
 --------------------------------------------------------------------------------
 -- Shelley Era

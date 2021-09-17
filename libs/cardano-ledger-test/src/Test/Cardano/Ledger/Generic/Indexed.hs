@@ -35,12 +35,12 @@ import Data.ByteString (ByteString, pack, unpack)
 import qualified Data.Map as Map
 import Data.Proxy (Proxy (..))
 import qualified Data.Sequence.Strict as Seq (fromList)
-import Shelley.Spec.Ledger.Scripts (MultiSig)
-import qualified Shelley.Spec.Ledger.Scripts as Multi
-import Shelley.Spec.Ledger.TxBody (WitVKey (..))
-import Shelley.Spec.Ledger.UTxO (makeWitnessVKey)
+import Cardano.Ledger.Shelley.Scripts (MultiSig)
+import qualified Cardano.Ledger.Shelley.Scripts as Multi
+import Cardano.Ledger.Shelley.TxBody (WitVKey (..))
+import Cardano.Ledger.Shelley.UTxO (makeWitnessVKey)
 import Test.Cardano.Ledger.Generic.Proof
-import Test.Shelley.Spec.Ledger.Utils (RawSeed (..), mkKeyPair)
+import Test.Cardano.Ledger.Shelley.Utils (RawSeed (..), mkKeyPair)
 
 -- ===========================================================================
 -- Classes for "picking" the unique element of a type associated with an Int

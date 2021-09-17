@@ -86,9 +86,9 @@ import Data.Typeable
 import GHC.Generics (Generic)
 import GHC.Records
 import NoThunks.Class (NoThunks (..))
-import Shelley.Spec.Ledger.Scripts (MultiSig, getMultiSigBytes)
-import Shelley.Spec.Ledger.Tx (WitVKey)
-import Shelley.Spec.Ledger.TxBody
+import Cardano.Ledger.Shelley.Scripts (MultiSig, getMultiSigBytes)
+import Cardano.Ledger.Shelley.Tx (WitVKey)
+import Cardano.Ledger.Shelley.TxBody
   ( witKeyHash,
   )
 

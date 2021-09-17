@@ -30,9 +30,9 @@ import Data.CanonicalMaps
 import Data.Map.Strict (empty, singleton)
 import qualified Data.Map.Strict as Map
 import qualified Test.QuickCheck as QC
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C_Crypto)
-import Test.Shelley.Spec.Ledger.Serialisation.EraIndepGenerators ()
-import Test.Shelley.Spec.Ledger.Serialisation.Generators ()
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (C_Crypto)
+import Test.Cardano.Ledger.Shelley.Serialisation.EraIndepGenerators ()
+import Test.Cardano.Ledger.Shelley.Serialisation.Generators ()
 import Test.Tasty
 import Test.Tasty.QuickCheck hiding (scale)
 import Prelude hiding (lookup)

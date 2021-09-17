@@ -23,11 +23,11 @@ import Cardano.Ledger.Shelley (ShelleyEra)
 import Control.Monad.Except (throwError)
 import Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
-import Shelley.Spec.Ledger.API
-import qualified Shelley.Spec.Ledger.LedgerState as LS
+import Cardano.Ledger.Shelley.API
+import qualified Cardano.Ledger.Shelley.LedgerState as LS
   ( returnRedeemAddrsToReserves,
   )
-import Shelley.Spec.Ledger.Tx (decodeWits)
+import Cardano.Ledger.Shelley.Tx (decodeWits)
 
 --------------------------------------------------------------------------------
 -- Translation from Shelley to Allegra

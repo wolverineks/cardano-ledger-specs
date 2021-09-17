@@ -71,7 +71,7 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import GHC.Records (HasField (getField))
 import NoThunks.Class (AllowThunksIn (..), NoThunks)
-import Shelley.Spec.Ledger.BlockChain (constructMetadata)
+import Cardano.Ledger.Shelley.BlockChain (constructMetadata)
 
 -- =================================================
 

@@ -85,9 +85,9 @@ import Data.Word (Word64)
 import GHC.Generics
 import GHC.Records
 import NoThunks.Class (NoThunks)
-import Shelley.Spec.Ledger.Address.Bootstrap (BootstrapWitness)
-import Shelley.Spec.Ledger.Scripts (ScriptHash)
-import Shelley.Spec.Ledger.TxBody (WitVKey)
+import Cardano.Ledger.Shelley.Address.Bootstrap (BootstrapWitness)
+import Cardano.Ledger.Shelley.Scripts (ScriptHash)
+import Cardano.Ledger.Shelley.TxBody (WitVKey)
 
 -- ==========================================
 

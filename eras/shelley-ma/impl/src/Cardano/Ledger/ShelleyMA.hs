@@ -53,15 +53,15 @@ import Data.Proxy (Proxy (..))
 import qualified Data.Set as Set
 import Data.Typeable (Typeable)
 import GHC.Records (HasField (..))
-import qualified Shelley.Spec.Ledger.BlockChain as Shelley
+import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
   ( TxSeq (..),
     bbHash,
     txSeqTxns,
   )
-import Shelley.Spec.Ledger.Metadata (validMetadatum)
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import Shelley.Spec.Ledger.Scripts (ScriptHash)
-import Shelley.Spec.Ledger.Tx (Tx, TxOut (..), WitnessSet)
+import Cardano.Ledger.Shelley.Metadata (validMetadatum)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import Cardano.Ledger.Shelley.Scripts (ScriptHash)
+import Cardano.Ledger.Shelley.Tx (Tx, TxOut (..), WitnessSet)
 
 -- ========================================
 

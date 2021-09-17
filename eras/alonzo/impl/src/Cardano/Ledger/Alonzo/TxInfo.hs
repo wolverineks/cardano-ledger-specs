@@ -120,11 +120,11 @@ import qualified Plutus.V1.Ledger.Api as P
     validateScript,
   )
 import Plutus.V1.Ledger.Contexts ()
-import qualified Shelley.Spec.Ledger.HardForks as HardForks
+import qualified Cardano.Ledger.Shelley.HardForks as HardForks
   ( translateTimeForPlutusScripts,
   )
-import Shelley.Spec.Ledger.Scripts (ScriptHash (..))
-import Shelley.Spec.Ledger.TxBody
+import Cardano.Ledger.Shelley.Scripts (ScriptHash (..))
+import Cardano.Ledger.Shelley.TxBody
   ( DCert (..),
     DelegCert (..),
     Delegation (..),
@@ -135,7 +135,7 @@ import Shelley.Spec.Ledger.TxBody
     Wdrl (..),
     WitVKey (..),
   )
-import Shelley.Spec.Ledger.UTxO (UTxO (..))
+import Cardano.Ledger.Shelley.UTxO (UTxO (..))
 
 -- =========================================================
 -- Translate Hashes, Credentials, Certificates etc.

@@ -58,37 +58,37 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import GHC.Records
 import NoThunks.Class
-import Shelley.Spec.Ledger.Delegation.Certificates
+import Cardano.Ledger.Shelley.Delegation.Certificates
   ( delegCWitness,
     genesisCWitness,
     poolCWitness,
     requiresVKeyWitness,
   )
-import Shelley.Spec.Ledger.LedgerState
+import Cardano.Ledger.Shelley.LedgerState
   ( UTxOState (..),
     WitHashes (..),
     propWits,
     unWitHashes,
     witsFromTxWitnesses,
   )
-import Shelley.Spec.Ledger.PParams (Update)
-import Shelley.Spec.Ledger.STS.Utxo (UtxoEnv (..))
-import Shelley.Spec.Ledger.STS.Utxow
+import Cardano.Ledger.Shelley.PParams (Update)
+import Cardano.Ledger.Shelley.Rules.Utxo (UtxoEnv (..))
+import Cardano.Ledger.Shelley.Rules.Utxow
   ( ShelleyStyleWitnessNeeds,
     UtxowEvent (UtxoEvent),
     UtxowPredicateFailure (..),
     shelleyStyleWitness,
   )
-import Shelley.Spec.Ledger.Scripts (ScriptHash (..))
-import Shelley.Spec.Ledger.Tx (TxIn (..), extractKeyHashWitnessSet)
-import Shelley.Spec.Ledger.TxBody
+import Cardano.Ledger.Shelley.Scripts (ScriptHash (..))
+import Cardano.Ledger.Shelley.Tx (TxIn (..), extractKeyHashWitnessSet)
+import Cardano.Ledger.Shelley.TxBody
   ( DCert (DCertDeleg, DCertGenesis, DCertPool),
     PoolCert (RegPool),
     PoolParams (..),
     Wdrl,
     unWdrl,
   )
-import Shelley.Spec.Ledger.UTxO (UTxO (..), txinLookup)
+import Cardano.Ledger.Shelley.UTxO (UTxO (..), txinLookup)
 
 -- =================================================
 

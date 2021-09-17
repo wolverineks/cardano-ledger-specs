@@ -47,7 +47,7 @@ import qualified Data.Map.Strict as Map
 import Data.Sequence.Strict (StrictSeq, fromList)
 import Data.Word (Word64)
 import Generic.Random (genericArbitraryU)
-import Shelley.Spec.Ledger.API hiding (SignedDSIGN, TxBody (..))
+import Cardano.Ledger.Shelley.API hiding (SignedDSIGN, TxBody (..))
 import Test.QuickCheck
   ( Arbitrary,
     arbitrary,
@@ -59,10 +59,10 @@ import Test.QuickCheck
     shrink,
     vectorOf,
   )
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
-import Test.Shelley.Spec.Ledger.Generator.Metadata (genMetadata')
-import Test.Shelley.Spec.Ledger.Serialisation.EraIndepGenerators ()
-import Test.Shelley.Spec.Ledger.Serialisation.Generators ()
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (Mock)
+import Test.Cardano.Ledger.Shelley.Generator.Metadata (genMetadata')
+import Test.Cardano.Ledger.Shelley.Serialisation.EraIndepGenerators ()
+import Test.Cardano.Ledger.Shelley.Serialisation.Generators ()
 import Test.Tasty.QuickCheck (Gen)
 
 {-------------------------------------------------------------------------------

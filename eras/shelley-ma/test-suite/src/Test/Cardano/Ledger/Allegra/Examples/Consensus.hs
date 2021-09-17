@@ -18,10 +18,10 @@ import Cardano.Ledger.ShelleyMA.TxBody
 import Cardano.Slotting.Slot
 import Data.Proxy
 import qualified Data.Sequence.Strict as StrictSeq
-import Shelley.Spec.Ledger.API
-import Test.Shelley.Spec.Ledger.Examples.Consensus
-import Test.Shelley.Spec.Ledger.Orphans ()
-import Test.Shelley.Spec.Ledger.Utils hiding (mkVRFKeyPair)
+import Cardano.Ledger.Shelley.API
+import Test.Cardano.Ledger.Shelley.Examples.Consensus
+import Test.Cardano.Ledger.Shelley.Orphans ()
+import Test.Cardano.Ledger.Shelley.Utils hiding (mkVRFKeyPair)
 
 type StandardAllegra = AllegraEra StandardCrypto
 

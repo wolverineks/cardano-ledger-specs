@@ -30,8 +30,8 @@ import Control.Monad.Except (throwError)
 import Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
-import Shelley.Spec.Ledger.API hiding (Metadata, TxBody)
-import Shelley.Spec.Ledger.Tx
+import Cardano.Ledger.Shelley.API hiding (Metadata, TxBody)
+import Cardano.Ledger.Shelley.Tx
   ( decodeWits,
   )
 

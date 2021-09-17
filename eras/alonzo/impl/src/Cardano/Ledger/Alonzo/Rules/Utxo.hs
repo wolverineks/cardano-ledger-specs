@@ -84,11 +84,11 @@ import GHC.Generics (Generic)
 import GHC.Records
 import NoThunks.Class (NoThunks)
 import Numeric.Natural (Natural)
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.STS.Utxo as Shelley
-import Shelley.Spec.Ledger.Tx (TxIn)
-import Shelley.Spec.Ledger.TxBody (unWdrl)
-import Shelley.Spec.Ledger.UTxO
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.Shelley.Rules.Utxo as Shelley
+import Cardano.Ledger.Shelley.Tx (TxIn)
+import Cardano.Ledger.Shelley.TxBody (unWdrl)
+import Cardano.Ledger.Shelley.UTxO
   ( UTxO (..),
     balance,
     txouts,

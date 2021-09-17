@@ -14,16 +14,16 @@ import Control.State.Transition.Extended hiding (Assertion)
 import Control.State.Transition.Trace (checkTrace, (.-), (.->))
 import Data.Default.Class (def)
 import GHC.Records
-import Shelley.Spec.Ledger.API (LEDGER, LedgerEnv (..))
-import Shelley.Spec.Ledger.LedgerState
+import Cardano.Ledger.Shelley.API (LEDGER, LedgerEnv (..))
+import Cardano.Ledger.Shelley.LedgerState
   ( DPState (..),
     UTxOState (..),
   )
-import Shelley.Spec.Ledger.PParams (PParams' (..))
-import Shelley.Spec.Ledger.Tx (Tx (..))
-import Shelley.Spec.Ledger.UTxO (UTxO)
+import Cardano.Ledger.Shelley.PParams (PParams' (..))
+import Cardano.Ledger.Shelley.Tx (Tx (..))
+import Cardano.Ledger.Shelley.UTxO (UTxO)
 import Test.Cardano.Ledger.EraBuffet (TestCrypto)
-import Test.Shelley.Spec.Ledger.Utils (applySTSTest, runShelleyBase)
+import Test.Cardano.Ledger.Shelley.Utils (applySTSTest, runShelleyBase)
 import Test.Tasty.HUnit (Assertion, (@?=))
 
 type MaryTest = MaryEra TestCrypto

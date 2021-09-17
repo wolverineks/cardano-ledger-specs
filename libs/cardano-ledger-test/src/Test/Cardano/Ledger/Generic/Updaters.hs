@@ -69,14 +69,14 @@ import qualified Data.Sequence.Strict as Seq (empty, fromList)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Numeric.Natural (Natural)
-import Shelley.Spec.Ledger.Address.Bootstrap (BootstrapWitness (..))
-import Shelley.Spec.Ledger.PParams (ProtVer (..))
-import qualified Shelley.Spec.Ledger.PParams as PP (PParams, PParams' (..), Update)
-import qualified Shelley.Spec.Ledger.Scripts as Multi
-import Shelley.Spec.Ledger.Tx as Shelley (WitnessSetHKD (addrWits, bootWits, scriptWits), pattern WitnessSet)
-import qualified Shelley.Spec.Ledger.Tx as Shelley (Tx (..))
-import Shelley.Spec.Ledger.TxBody (DCert (..), TxIn (..), Wdrl (..), WitVKey (..))
-import qualified Shelley.Spec.Ledger.TxBody as Shelley (TxBody (..), TxOut (..))
+import Cardano.Ledger.Shelley.Address.Bootstrap (BootstrapWitness (..))
+import Cardano.Ledger.Shelley.PParams (ProtVer (..))
+import qualified Cardano.Ledger.Shelley.PParams as PP (PParams, PParams' (..), Update)
+import qualified Cardano.Ledger.Shelley.Scripts as Multi
+import Cardano.Ledger.Shelley.Tx as Shelley (WitnessSetHKD (addrWits, bootWits, scriptWits), pattern WitnessSet)
+import qualified Cardano.Ledger.Shelley.Tx as Shelley (Tx (..))
+import Cardano.Ledger.Shelley.TxBody (DCert (..), TxIn (..), Wdrl (..), WitVKey (..))
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley (TxBody (..), TxOut (..))
 import Test.Cardano.Ledger.Generic.Indexed
 import Test.Cardano.Ledger.Generic.Proof
 

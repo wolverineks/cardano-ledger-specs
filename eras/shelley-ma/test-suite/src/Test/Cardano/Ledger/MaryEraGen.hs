@@ -41,9 +41,9 @@ import Data.Sequence.Strict (StrictSeq (..), (<|), (><))
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import GHC.Records (HasField (getField))
-import Shelley.Spec.Ledger.PParams (PParams, PParams' (..), Update)
-import Shelley.Spec.Ledger.Tx (TxIn, TxOut (..), hashScript, pattern Tx, pattern WitnessSet)
-import Shelley.Spec.Ledger.TxBody (DCert, Wdrl)
+import Cardano.Ledger.Shelley.PParams (PParams, PParams' (..), Update)
+import Cardano.Ledger.Shelley.Tx (TxIn, TxOut (..), hashScript, pattern Tx, pattern WitnessSet)
+import Cardano.Ledger.Shelley.TxBody (DCert, Wdrl)
 import Test.Cardano.Ledger.AllegraEraGen
   ( genValidityInterval,
     quantifyTL,
@@ -53,16 +53,16 @@ import Test.Cardano.Ledger.AllegraEraGen
 import Test.Cardano.Ledger.EraBuffet (MaryEra)
 import Test.QuickCheck (Gen, arbitrary, frequency)
 import qualified Test.QuickCheck as QC
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
-import Test.Shelley.Spec.Ledger.Generator.Constants (Constants (..))
-import Test.Shelley.Spec.Ledger.Generator.Core (GenEnv (..), genInteger)
-import Test.Shelley.Spec.Ledger.Generator.EraGen (EraGen (..), MinGenTxout (..))
-import Test.Shelley.Spec.Ledger.Generator.ScriptClass
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (Mock)
+import Test.Cardano.Ledger.Shelley.Generator.Constants (Constants (..))
+import Test.Cardano.Ledger.Shelley.Generator.Core (GenEnv (..), genInteger)
+import Test.Cardano.Ledger.Shelley.Generator.EraGen (EraGen (..), MinGenTxout (..))
+import Test.Cardano.Ledger.Shelley.Generator.ScriptClass
   ( ScriptClass (..),
     exponential,
   )
-import Test.Shelley.Spec.Ledger.Generator.Update (genPParams, genShelleyPParamsDelta)
-import Test.Shelley.Spec.Ledger.Utils (Split (..))
+import Test.Cardano.Ledger.Shelley.Generator.Update (genPParams, genShelleyPParamsDelta)
+import Test.Cardano.Ledger.Shelley.Utils (Split (..))
 
 {------------------------------------------------------------------------------
  EraGen instance for MaryEra - This instance makes it possible to run the

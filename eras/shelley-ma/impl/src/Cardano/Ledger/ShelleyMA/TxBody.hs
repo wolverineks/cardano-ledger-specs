@@ -99,8 +99,8 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import GHC.Records
 import NoThunks.Class (NoThunks (..))
-import Shelley.Spec.Ledger.PParams (Update)
-import Shelley.Spec.Ledger.TxBody
+import Cardano.Ledger.Shelley.PParams (Update)
+import Cardano.Ledger.Shelley.TxBody
   ( DCert (..),
     TxIn (..),
     TxOut (..),

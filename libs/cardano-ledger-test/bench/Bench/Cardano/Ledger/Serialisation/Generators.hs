@@ -5,7 +5,7 @@ module Bench.Cardano.Ledger.Serialisation.Generators
 where
 
 import Criterion.Main
-import Shelley.Spec.Ledger.Tx
+import Cardano.Ledger.Shelley.Tx
 import Test.Cardano.Ledger.EraBuffet
 import Test.Cardano.Ledger.ShelleyMA.Serialisation.Generators ()
 import Test.QuickCheck

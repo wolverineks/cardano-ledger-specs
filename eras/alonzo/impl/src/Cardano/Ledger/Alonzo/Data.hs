@@ -84,7 +84,7 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import NoThunks.Class (InspectHeapNamed (..), NoThunks)
 import qualified Plutus.V1.Ledger.Api as Plutus
-import Shelley.Spec.Ledger.Metadata (Metadatum)
+import Cardano.Ledger.Shelley.Metadata (Metadatum)
 
 -- =====================================================================
 -- Plutus.Data is the type that Plutus expects as data.

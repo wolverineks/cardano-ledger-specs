@@ -57,20 +57,20 @@ import Data.Typeable
 import GHC.Generics (Generic)
 import GHC.Records
 import NoThunks.Class (NoThunks (..))
-import Shelley.Spec.Ledger.BlockChain
+import Cardano.Ledger.Shelley.BlockChain
   ( Block (..),
     bBodySize,
     incrBlocks,
   )
-import Shelley.Spec.Ledger.LedgerState (LedgerState)
-import Shelley.Spec.Ledger.STS.Bbody
+import Cardano.Ledger.Shelley.LedgerState (LedgerState)
+import Cardano.Ledger.Shelley.Rules.Bbody
   ( BbodyEnv (..),
     BbodyEvent (..),
     BbodyPredicateFailure (..),
     BbodyState (..),
   )
-import Shelley.Spec.Ledger.STS.Ledgers (LedgersEnv (..))
-import Shelley.Spec.Ledger.TxBody (EraIndependentTxBody)
+import Cardano.Ledger.Shelley.Rules.Ledgers (LedgersEnv (..))
+import Cardano.Ledger.Shelley.TxBody (EraIndependentTxBody)
 
 -- =======================================
 -- A new PredicateFailure type

@@ -74,9 +74,9 @@ import GHC.Records (HasField (..))
 import Plutus.V1.Ledger.Api (defaultCostModelParams)
 import qualified PlutusTx as P (Data (..))
 import qualified PlutusTx as Plutus
-import Shelley.Spec.Ledger.PParams (Update)
-import Shelley.Spec.Ledger.TxBody (DCert, TxIn, Wdrl)
-import Shelley.Spec.Ledger.UTxO (UTxO (..), balance)
+import Cardano.Ledger.Shelley.PParams (Update)
+import Cardano.Ledger.Shelley.TxBody (DCert, TxIn, Wdrl)
+import Cardano.Ledger.Shelley.UTxO (UTxO (..), balance)
 import Test.Cardano.Ledger.AllegraEraGen (genValidityInterval)
 import Test.Cardano.Ledger.Alonzo.PlutusScripts
   ( evenRedeemer2,
@@ -89,9 +89,9 @@ import Test.Cardano.Ledger.Alonzo.PlutusScripts
   )
 import Test.Cardano.Ledger.MaryEraGen (addTokens, genMint, maryGenesisValue, policyIndex)
 import Test.QuickCheck hiding ((><))
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
-import Test.Shelley.Spec.Ledger.Generator.Constants (Constants (..))
-import Test.Shelley.Spec.Ledger.Generator.Core
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (Mock)
+import Test.Cardano.Ledger.Shelley.Generator.Constants (Constants (..))
+import Test.Cardano.Ledger.Shelley.Generator.Core
   ( GenEnv (..),
     ScriptInfo,
     TwoPhase2ArgInfo (..),
@@ -100,12 +100,12 @@ import Test.Shelley.Spec.Ledger.Generator.Core
     genNatural,
     hashData,
   )
-import Test.Shelley.Spec.Ledger.Generator.EraGen (EraGen (..), MinGenTxout (..))
-import Test.Shelley.Spec.Ledger.Generator.ScriptClass (Quantifier (..), ScriptClass (..))
-import Test.Shelley.Spec.Ledger.Generator.Update (genM, genShelleyPParamsDelta)
-import qualified Test.Shelley.Spec.Ledger.Generator.Update as Shelley (genPParams)
-import Test.Shelley.Spec.Ledger.Generator.Utxo (encodedLen, myDiscard)
-import Test.Shelley.Spec.Ledger.Utils (unsafeBoundRational)
+import Test.Cardano.Ledger.Shelley.Generator.EraGen (EraGen (..), MinGenTxout (..))
+import Test.Cardano.Ledger.Shelley.Generator.ScriptClass (Quantifier (..), ScriptClass (..))
+import Test.Cardano.Ledger.Shelley.Generator.Update (genM, genShelleyPParamsDelta)
+import qualified Test.Cardano.Ledger.Shelley.Generator.Update as Shelley (genPParams)
+import Test.Cardano.Ledger.Shelley.Generator.Utxo (encodedLen, myDiscard)
+import Test.Cardano.Ledger.Shelley.Utils (unsafeBoundRational)
 
 -- ============================================================
 

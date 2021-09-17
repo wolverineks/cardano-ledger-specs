@@ -103,7 +103,7 @@ import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 import NoThunks.Class (NoThunks (..), OnlyCheckWhnfNamed (..))
 import Prettyprinter (hsep)
-import Shelley.Spec.Ledger.Scripts (ScriptHash (..))
+import Cardano.Ledger.Shelley.Scripts (ScriptHash (..))
 import Prelude hiding (lookup)
 
 -- | Asset Name

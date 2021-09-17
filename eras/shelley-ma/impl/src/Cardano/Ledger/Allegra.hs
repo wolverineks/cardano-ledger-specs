@@ -30,11 +30,11 @@ import Cardano.Ledger.ShelleyMA.TxBody ()
 import Cardano.Ledger.Val (Val ((<->)))
 import Data.Default.Class (def)
 import qualified Data.Map.Strict as Map
-import Shelley.Spec.Ledger.API hiding (PParams, Tx, TxBody, TxOut, WitnessSet)
-import Shelley.Spec.Ledger.EpochBoundary (BlocksMade (..), emptySnapShots)
-import Shelley.Spec.Ledger.LedgerState (minfee)
-import qualified Shelley.Spec.Ledger.PParams as Shelley (PParamsUpdate)
-import Shelley.Spec.Ledger.Tx (WitnessSet)
+import Cardano.Ledger.Shelley.API hiding (PParams, Tx, TxBody, TxOut, WitnessSet)
+import Cardano.Ledger.Shelley.EpochBoundary (BlocksMade (..), emptySnapShots)
+import Cardano.Ledger.Shelley.LedgerState (minfee)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley (PParamsUpdate)
+import Cardano.Ledger.Shelley.Tx (WitnessSet)
 
 type AllegraEra = ShelleyMAEra 'Allegra
 

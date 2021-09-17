@@ -29,7 +29,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Shelley.Spec.Ledger.Tx (hashScript)
+import Cardano.Ledger.Shelley.Tx (hashScript)
 import Test.Cardano.Ledger.EraBuffet (StandardCrypto)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))

@@ -54,7 +54,7 @@ import Data.Typeable (Typeable)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import NoThunks.Class
-import Shelley.Spec.Ledger.Metadata (Metadatum)
+import Cardano.Ledger.Shelley.Metadata (Metadatum)
 
 -- =======================================
 

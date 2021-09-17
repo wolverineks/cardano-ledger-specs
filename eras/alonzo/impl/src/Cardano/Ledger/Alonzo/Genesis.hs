@@ -22,7 +22,7 @@ import Data.Map.Strict
 import GHC.Generics (Generic)
 import NoThunks.Class (NoThunks)
 import Numeric.Natural
-import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
 
 data AlonzoGenesis = AlonzoGenesis
   { coinsPerUTxOWord :: !Coin,

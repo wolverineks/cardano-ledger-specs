@@ -15,7 +15,7 @@ import Data.GenValidity.Scientific ()
 import Data.Scientific
 import Data.Typeable
 import Test.QuickCheck
-import Test.Shelley.Spec.Ledger.Serialisation.EraIndepGenerators ()
+import Test.Cardano.Ledger.Shelley.Serialisation.EraIndepGenerators ()
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck

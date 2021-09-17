@@ -69,7 +69,7 @@ import qualified Data.Set as Set
 import GHC.Stack
 import Numeric.Natural
 import Plutus.V1.Ledger.Api (defaultCostModelParams)
-import Shelley.Spec.Ledger.API
+import Cardano.Ledger.Shelley.API
   ( Addr (..),
     Credential (..),
     LedgerEnv (LedgerEnv),
@@ -79,8 +79,8 @@ import Shelley.Spec.Ledger.API
     UTxO (..),
     Wdrl (..),
   )
-import Shelley.Spec.Ledger.EpochBoundary (obligation)
-import Shelley.Spec.Ledger.LedgerState
+import Cardano.Ledger.Shelley.EpochBoundary (obligation)
+import Cardano.Ledger.Shelley.LedgerState
   ( AccountState (..),
     DPState (..),
     DState (..),
@@ -88,15 +88,15 @@ import Shelley.Spec.Ledger.LedgerState
     RewardAccounts,
     UTxOState (..),
   )
-import Shelley.Spec.Ledger.STS.Utxo (UtxoEnv (..))
-import Shelley.Spec.Ledger.Tx (hashScript)
-import Shelley.Spec.Ledger.TxBody (DCert (..), DelegCert (..), Delegation (..), PoolParams (..))
-import Shelley.Spec.Ledger.UTxO (balance, makeWitnessVKey)
+import Cardano.Ledger.Shelley.Rules.Utxo (UtxoEnv (..))
+import Cardano.Ledger.Shelley.Tx (hashScript)
+import Cardano.Ledger.Shelley.TxBody (DCert (..), DelegCert (..), Delegation (..), PoolParams (..))
+import Cardano.Ledger.Shelley.UTxO (balance, makeWitnessVKey)
 import Test.Cardano.Ledger.Alonzo.Serialisation.Generators ()
 import Test.QuickCheck
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C_Crypto)
-import Test.Shelley.Spec.Ledger.Serialisation.EraIndepGenerators ()
-import Test.Shelley.Spec.Ledger.Utils (applySTSTest, runShelleyBase)
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (C_Crypto)
+import Test.Cardano.Ledger.Shelley.Serialisation.EraIndepGenerators ()
+import Test.Cardano.Ledger.Shelley.Utils (applySTSTest, runShelleyBase)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 

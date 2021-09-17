@@ -34,8 +34,8 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import GHC.Records (HasField (..))
 import qualified Plutus.V1.Ledger.Api as P
-import Shelley.Spec.Ledger.Tx (TxIn)
-import Shelley.Spec.Ledger.UTxO (UTxO (..), unUTxO)
+import Cardano.Ledger.Shelley.Tx (TxIn)
+import Cardano.Ledger.Shelley.UTxO (UTxO (..), unUTxO)
 
 -- | Failures that can be returned by 'evaluateTransactionExecutionUnits'.
 data ScriptFailure c

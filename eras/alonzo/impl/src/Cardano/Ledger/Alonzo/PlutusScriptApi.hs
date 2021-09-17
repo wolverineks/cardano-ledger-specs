@@ -68,9 +68,9 @@ import Data.Text (pack)
 import GHC.Generics
 import GHC.Records (HasField (..))
 import NoThunks.Class (NoThunks)
-import Shelley.Spec.Ledger.Delegation.Certificates (DCert (..))
-import Shelley.Spec.Ledger.Scripts (ScriptHash (..))
-import Shelley.Spec.Ledger.TxBody
+import Cardano.Ledger.Shelley.Delegation.Certificates (DCert (..))
+import Cardano.Ledger.Shelley.Scripts (ScriptHash (..))
+import Cardano.Ledger.Shelley.TxBody
   ( DelegCert (..),
     Delegation (..),
     TxIn (..),
@@ -78,7 +78,7 @@ import Shelley.Spec.Ledger.TxBody
     getRwdCred,
     witKeyHash,
   )
-import Shelley.Spec.Ledger.UTxO (UTxO (..), getScriptHash, scriptCred)
+import Cardano.Ledger.Shelley.UTxO (UTxO (..), getScriptHash, scriptCred)
 
 -- ===============================================================
 -- From the specification, Figure 8 "Scripts and their Arguments"

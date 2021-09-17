@@ -34,16 +34,16 @@ import Cardano.Ledger.Mary (MaryEra)
 import Control.Monad.Except (Except, throwError)
 import Data.Coders
 import Data.Text (Text)
-import Shelley.Spec.Ledger.API
+import Cardano.Ledger.Shelley.API
   ( EpochState (..),
     NewEpochState (..),
     ShelleyGenesis,
     StrictMaybe (..),
   )
-import qualified Shelley.Spec.Ledger.API as API
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.Tx as LTX
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
+import qualified Cardano.Ledger.Shelley.API as API
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import qualified Cardano.Ledger.Shelley.Tx as LTX
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 --------------------------------------------------------------------------------
 -- Translation from Mary to Alonzo

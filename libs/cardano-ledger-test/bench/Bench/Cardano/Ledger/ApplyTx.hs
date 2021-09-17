@@ -27,7 +27,7 @@ import Data.Proxy (Proxy (..))
 import qualified Data.Sequence as Seq
 import Data.Typeable (typeRep)
 import GHC.Generics (Generic)
-import Shelley.Spec.Ledger.API
+import Cardano.Ledger.Shelley.API
   ( AccountState (..),
     ApplyTx,
     Coin (..),
@@ -38,8 +38,8 @@ import Shelley.Spec.Ledger.API
     Tx,
     applyTxsTransition,
   )
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C_Crypto)
-import Test.Shelley.Spec.Ledger.Utils (testGlobals)
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (C_Crypto)
+import Test.Cardano.Ledger.Shelley.Utils (testGlobals)
 
 type ShelleyBench = ShelleyEra C_Crypto
 

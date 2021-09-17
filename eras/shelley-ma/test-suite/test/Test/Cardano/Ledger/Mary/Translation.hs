@@ -15,7 +15,7 @@ import Cardano.Binary
 import Cardano.Ledger.Era (TranslateEra (..))
 import Cardano.Ledger.Mary.Translation ()
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as MA
-import qualified Shelley.Spec.Ledger.API as S
+import qualified Cardano.Ledger.Shelley.API as S
 import Test.Cardano.Ledger.AllegraEraGen ()
 -- import Allegra EraGen instance
 import Test.Cardano.Ledger.EraBuffet
@@ -28,9 +28,9 @@ import Test.Cardano.Ledger.TranslationTools
   ( decodeTestAnn,
     translationCompatToCBOR,
   )
-import Test.Shelley.Spec.Ledger.Generator.ShelleyEraGen ()
-import Test.Shelley.Spec.Ledger.Serialisation.EraIndepGenerators ()
-import Test.Shelley.Spec.Ledger.Serialisation.Generators ()
+import Test.Cardano.Ledger.Shelley.Generator.ShelleyEraGen ()
+import Test.Cardano.Ledger.Shelley.Serialisation.EraIndepGenerators ()
+import Test.Cardano.Ledger.Shelley.Serialisation.Generators ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 

@@ -106,9 +106,9 @@ import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import NoThunks.Class (NoThunks (..))
 import Numeric.Natural (Natural)
-import Shelley.Spec.Ledger.Orphans ()
-import Shelley.Spec.Ledger.PParams (HKD, ProtVer (..))
-import qualified Shelley.Spec.Ledger.PParams as Shelley (PParams' (..))
+import Cardano.Ledger.Shelley.Orphans ()
+import Cardano.Ledger.Shelley.PParams (HKD, ProtVer (..))
+import qualified Cardano.Ledger.Shelley.PParams as Shelley (PParams' (..))
 
 type PParamsUpdate era = PParams' StrictMaybe era
 

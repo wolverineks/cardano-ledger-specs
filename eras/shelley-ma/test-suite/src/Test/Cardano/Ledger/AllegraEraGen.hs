@@ -45,21 +45,21 @@ import Control.Monad (replicateM)
 import Data.Hashable (hash)
 import Data.Sequence.Strict (StrictSeq (..), fromList)
 import qualified Data.Set as Set
-import Shelley.Spec.Ledger.API (KeyRole (Witness))
-import Shelley.Spec.Ledger.PParams (PParams, PParams' (..), Update)
-import Shelley.Spec.Ledger.Tx (pattern Tx, pattern WitnessSet)
-import Shelley.Spec.Ledger.TxBody (DCert, TxIn, TxOut (..), Wdrl)
+import Cardano.Ledger.Shelley.API (KeyRole (Witness))
+import Cardano.Ledger.Shelley.PParams (PParams, PParams' (..), Update)
+import Cardano.Ledger.Shelley.Tx (pattern Tx, pattern WitnessSet)
+import Cardano.Ledger.Shelley.TxBody (DCert, TxIn, TxOut (..), Wdrl)
 import Test.Cardano.Ledger.ShelleyMA.Serialisation.Generators ()
 import Test.QuickCheck (Gen, arbitrary, frequency)
-import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
-import Test.Shelley.Spec.Ledger.Generator.Constants (Constants (..))
-import Test.Shelley.Spec.Ledger.Generator.Core (GenEnv (..), genCoin)
-import Test.Shelley.Spec.Ledger.Generator.EraGen (EraGen (..), MinGenTxout (..))
-import Test.Shelley.Spec.Ledger.Generator.ScriptClass
+import Test.Cardano.Ledger.Shelley.ConcreteCryptoTypes (Mock)
+import Test.Cardano.Ledger.Shelley.Generator.Constants (Constants (..))
+import Test.Cardano.Ledger.Shelley.Generator.Core (GenEnv (..), genCoin)
+import Test.Cardano.Ledger.Shelley.Generator.EraGen (EraGen (..), MinGenTxout (..))
+import Test.Cardano.Ledger.Shelley.Generator.ScriptClass
   ( Quantifier (..),
     ScriptClass (..),
   )
-import Test.Shelley.Spec.Ledger.Generator.Update (genPParams, genShelleyPParamsDelta)
+import Test.Cardano.Ledger.Shelley.Generator.Update (genPParams, genShelleyPParamsDelta)
 
 -- ==========================================================
 

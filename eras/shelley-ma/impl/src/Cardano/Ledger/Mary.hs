@@ -30,10 +30,10 @@ import Cardano.Ledger.ShelleyMA.Timelocks (Timelock)
 import Cardano.Ledger.Val (Val ((<->)), coin, inject)
 import Data.Default.Class (def)
 import qualified Data.Map.Strict as Map
-import Shelley.Spec.Ledger.API hiding (TxBody)
-import Shelley.Spec.Ledger.EpochBoundary (BlocksMade (..), emptySnapShots)
-import Shelley.Spec.Ledger.LedgerState (minfee)
-import qualified Shelley.Spec.Ledger.PParams as Shelley (PParamsUpdate)
+import Cardano.Ledger.Shelley.API hiding (TxBody)
+import Cardano.Ledger.Shelley.EpochBoundary (BlocksMade (..), emptySnapShots)
+import Cardano.Ledger.Shelley.LedgerState (minfee)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley (PParamsUpdate)
 
 instance PraosCrypto c => ApplyTx (MaryEra c)
 
