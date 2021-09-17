@@ -45,7 +45,6 @@ import qualified Data.Set as Set
 import Shelley.Spec.Ledger.BlockChain (Block, bheader)
 import Shelley.Spec.Ledger.LedgerState (FutureGenDeleg (..), PulsingRewUpdate)
 import Shelley.Spec.Ledger.PParams (PParams' (..))
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.Tx (Tx (..), WitnessSet, WitnessSetHKD (..))
 import Shelley.Spec.Ledger.TxBody
   ( DCert (..),
@@ -56,6 +55,7 @@ import Shelley.Spec.Ledger.TxBody
     Wdrl (..),
   )
 import Shelley.Spec.Ledger.UTxO (UTxO (..), makeWitnessesVKey)
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (ExMock)
 import Test.Shelley.Spec.Ledger.Examples (CHAINExample (..), testCHAINExample)
 import qualified Test.Shelley.Spec.Ledger.Examples.Cast as Cast

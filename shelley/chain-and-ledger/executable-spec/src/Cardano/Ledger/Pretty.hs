@@ -158,7 +158,6 @@ import Shelley.Spec.Ledger.Rewards
     RewardType (..),
     StakeShare (..),
   )
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.Scripts (MultiSig (..), ScriptHash (..))
 import Shelley.Spec.Ledger.Tx
   ( Tx (..),
@@ -382,21 +381,8 @@ class PrettyA t where
 -- ================================= ====================================================================
 
 -- ================================
--- Shelley.Spec.Ledger.STS.Chain(ChainState(..))
+-- Test.Cardano.Ledger.Chain(ChainState(..))
 -- import Shelley.Spec.Ledger.BlockChain(LastAppliedBlock(..),HashHeader(..))
-
-ppChainState :: CanPrettyPrintLedgerState era => ChainState era -> PDoc
-ppChainState (ChainState nes ocert epochnonce evolvenonce prevnonce candnonce lastab) =
-  ppRecord
-    "ChainState"
-    [ ("newepoch", ppNewEpochState nes),
-      ("ocerts", ppMap ppKeyHash ppWord64 ocert),
-      ("epochNonce", ppNonce epochnonce),
-      ("evolvingNonce", ppNonce evolvenonce),
-      ("candidateNonce", ppNonce prevnonce),
-      ("prevepochNonce", ppNonce candnonce),
-      ("lastApplidBlock", ppWithOrigin ppLastAppliedBlock lastab)
-    ]
 
 ppLastAppliedBlock :: LastAppliedBlock c -> PDoc
 ppLastAppliedBlock (LastAppliedBlock blkNo slotNo hh) =
@@ -413,9 +399,6 @@ ppHashHeader (HashHeader x) = ppHash x
 ppWithOrigin :: (t -> PDoc) -> WithOrigin t -> PDoc
 ppWithOrigin _ Origin = ppString "Origin"
 ppWithOrigin pp (At t) = ppSexp "At" [pp t]
-
-instance CanPrettyPrintLedgerState era => PrettyA (ChainState era) where
-  prettyA = ppChainState
 
 instance PrettyA (LastAppliedBlock c) where
   prettyA = ppLastAppliedBlock

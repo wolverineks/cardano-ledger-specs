@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Shelley.Spec.Ledger.STS.Tickn
+module Cardano.Protocol.TPraos.Rules.Tickn
   ( TICKN,
     TicknEnv (..),
     TicknState (..),

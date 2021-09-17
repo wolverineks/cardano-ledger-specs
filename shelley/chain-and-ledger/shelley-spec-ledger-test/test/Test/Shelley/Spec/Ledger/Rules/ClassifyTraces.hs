@@ -53,7 +53,6 @@ import Data.Set (Set)
 import GHC.Records (HasField (..), getField)
 import Shelley.Spec.Ledger.API
   ( Addr (..),
-    CHAIN,
     Credential (..),
     DCert (..),
     DelegCert (..),
@@ -83,6 +82,7 @@ import Shelley.Spec.Ledger.PParams
   )
 import Shelley.Spec.Ledger.PParams as PParams (Update)
 import Shelley.Spec.Ledger.TxBody (TxIn, Wdrl (..))
+import Test.Cardano.Ledger.Chain (CHAIN)
 import Test.QuickCheck
   ( Property,
     checkCoverage,

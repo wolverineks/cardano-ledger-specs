@@ -25,7 +25,6 @@ import GHC.Records (HasField (..))
 import Shelley.Spec.Ledger.API
   ( ApplyBlock,
     Block,
-    ChainState (..),
     DCert,
     DPState,
     DelplEnv,
@@ -39,6 +38,7 @@ import Shelley.Spec.Ledger.LedgerState
     NewEpochState (..),
   )
 import Shelley.Spec.Ledger.Tx (TxIn)
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.QuickCheck (generate)
 import Test.Shelley.Spec.Ledger.BenchmarkFunctions (ledgerEnv)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)

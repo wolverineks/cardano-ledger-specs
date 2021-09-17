@@ -20,8 +20,8 @@ import Cardano.Protocol.TPraos.OCert (KESPeriod (..))
 import qualified Data.Map.Strict as Map
 import GHC.Stack (HasCallStack)
 import Shelley.Spec.Ledger.BlockChain (Block)
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.UTxO (UTxO (..))
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (ExMock)
 import Test.Shelley.Spec.Ledger.Examples (CHAINExample (..))
 import Test.Shelley.Spec.Ledger.Examples.Combinators

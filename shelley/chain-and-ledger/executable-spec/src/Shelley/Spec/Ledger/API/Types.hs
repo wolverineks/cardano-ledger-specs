@@ -74,6 +74,12 @@ import Cardano.Protocol.TPraos.Rules.Prtcl as X
     PrtlSeqFailure (..),
     prtlSeqChecks,
   )
+import Cardano.Protocol.TPraos.Rules.Tickn as X
+  ( TICKN,
+    TicknEnv (..),
+    TicknPredicateFailure,
+    TicknState (..),
+  )
 import Shelley.Spec.Ledger.Address.Bootstrap as X
   ( BootstrapWitness (..),
   )
@@ -124,11 +130,6 @@ import Shelley.Spec.Ledger.PParams as X
 import Shelley.Spec.Ledger.Rewards as X
   ( NonMyopic,
   )
-import Shelley.Spec.Ledger.STS.Chain as X
-  ( CHAIN,
-    ChainState (..),
-    initialShelleyState,
-  )
 import Shelley.Spec.Ledger.STS.Deleg as X (DELEG, DelegEnv (..))
 import Shelley.Spec.Ledger.STS.Delegs as X (DELEGS, DelegsEnv (..))
 import Shelley.Spec.Ledger.STS.Delpl as X (DELPL, DelplEnv (..))
@@ -142,12 +143,6 @@ import Shelley.Spec.Ledger.STS.Pool as X (POOL, PoolEnv (..))
 import Shelley.Spec.Ledger.STS.PoolReap as X (POOLREAP)
 import Shelley.Spec.Ledger.STS.Ppup as X (PPUP, PPUPEnv (..))
 import Shelley.Spec.Ledger.STS.Tick as X (TICK)
-import Shelley.Spec.Ledger.STS.Tickn as X
-  ( TICKN,
-    TicknEnv (..),
-    TicknPredicateFailure,
-    TicknState (..),
-  )
 import Shelley.Spec.Ledger.STS.Utxo as X
   ( UTXO,
     UtxoEnv (..),

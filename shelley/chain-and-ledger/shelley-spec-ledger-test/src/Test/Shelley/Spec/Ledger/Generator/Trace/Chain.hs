@@ -60,7 +60,7 @@ import Numeric.Natural (Natural)
 import Shelley.Spec.Ledger.API
 import Shelley.Spec.Ledger.LedgerState (stakeDistr)
 import Shelley.Spec.Ledger.STS.Bbody (BbodyEnv, BbodyState)
-import qualified Shelley.Spec.Ledger.STS.Chain as STS (ChainState (ChainState))
+import Test.Cardano.Ledger.Chain (CHAIN, ChainState (..), initialShelleyState)
 import Test.QuickCheck (Gen)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
   ( Mock,
@@ -162,7 +162,7 @@ mkGenesisChainState ge@(GenEnv _ _ constants) (IRC _slotNo) = do
     -- We preload the initial state with some Treasury to enable generation
     -- of things dependent on Treasury (e.g. MIR Treasury certificates)
     withRewards :: ChainState h -> ChainState h
-    withRewards st@STS.ChainState {..} =
+    withRewards st@ChainState {..} =
       st
         { chainNes =
             chainNes
@@ -199,7 +199,7 @@ registerGenesisStaking ::
   ChainState era
 registerGenesisStaking
   ShelleyGenesisStaking {sgsPools, sgsStake}
-  cs@(STS.ChainState {chainNes = oldChainNes}) =
+  cs@(ChainState {chainNes = oldChainNes}) =
     cs
       { chainNes = newChainNes
       }

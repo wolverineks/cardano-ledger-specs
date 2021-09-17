@@ -69,6 +69,7 @@ import Cardano.Ledger.Shelley.Constraints
   )
 import Cardano.Protocol.TPraos (IndividualPoolStake (..))
 import qualified Cardano.Protocol.TPraos.Rules.Prtcl as STS (PrtclState)
+import qualified Cardano.Protocol.TPraos.Rules.Tickn as STS
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Control.SetAlgebra (biMapFromList)
@@ -121,7 +122,6 @@ import qualified Shelley.Spec.Ledger.STS.Ledger as STS
 import qualified Shelley.Spec.Ledger.STS.Ledgers as STS
 import qualified Shelley.Spec.Ledger.STS.Pool as STS
 import qualified Shelley.Spec.Ledger.STS.Ppup as STS
-import qualified Shelley.Spec.Ledger.STS.Tickn as STS
 import qualified Shelley.Spec.Ledger.STS.Utxow as STS
 import Shelley.Spec.Ledger.Tx (WitnessSetHKD (WitnessSet), hashScript)
 import Test.QuickCheck

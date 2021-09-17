@@ -44,6 +44,7 @@ library
                       test
   exposed-modules:
     Test.Cardano.Crypto.VRF.Fake
+    Test.Cardano.Ledger.Chain
     Test.Shelley.Spec.Ledger.BenchmarkFunctions
     Test.Shelley.Spec.Ledger.ConcreteCryptoTypes
     Test.Shelley.Spec.Ledger.Examples.Cast
@@ -102,12 +103,14 @@ library
     cborg,
     containers,
     data-default-class,
+    deepseq,
     directory,
     generic-random,
     hashable,
     hedgehog-quickcheck,
     hedgehog >= 1.0.4,
     iproute,
+    mtl,
     nothunks,
     process-extras,
     plutus-ledger-api,

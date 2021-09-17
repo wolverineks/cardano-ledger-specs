@@ -42,6 +42,7 @@ import Data.Sequence (Seq)
 import qualified Data.Set as Set
 import GHC.Records (HasField (getField))
 import Shelley.Spec.Ledger.API
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.QuickCheck (Gen)
 import qualified Test.QuickCheck as QC (choose)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes

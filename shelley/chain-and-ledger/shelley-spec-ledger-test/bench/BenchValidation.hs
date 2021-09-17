@@ -35,6 +35,7 @@ import Cardano.Ledger.Shelley.Constraints (TransValue)
 import Cardano.Prelude (NFData (rnf))
 import Cardano.Protocol.TPraos.BHeader (BHeader (..), LastAppliedBlock (..))
 import Cardano.Protocol.TPraos.Rules.Prtcl (PrtclState (..))
+import Cardano.Protocol.TPraos.Rules.Tickn (TicknState (..))
 import Cardano.Slotting.Slot (withOriginToMaybe)
 import Control.Monad.Except ()
 import Control.State.Transition (STS (State))
@@ -57,9 +58,8 @@ import Shelley.Spec.Ledger.LedgerState
   ( NewEpochState,
     nesBcur,
   )
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
-import Shelley.Spec.Ledger.STS.Tickn (TicknState (..))
 import Shelley.Spec.Ledger.TxBody (TransTxBody, TransTxId)
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
 import Test.Shelley.Spec.Ledger.Generator.Core (GenEnv)
 -- Use Another constraint, so this works in all Eras

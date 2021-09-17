@@ -13,21 +13,16 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Shelley.Spec.Ledger.STS.Chain
+module Test.Cardano.Ledger.Chain
   ( CHAIN,
     ChainState (..),
-    ChainPredicateFailure (..),
+    TestChainPredicateFailure (..),
     ChainEvent (..),
     PredicateFailure,
     AdaPots (..),
     initialShelleyState,
     totalAda,
-    totalAdaES,
     totalAdaPots,
-    totalAdaPotsES,
-    ChainChecksData (..),
-    pparamsToChainChecksData,
-    chainChecks,
   )
 where
 
@@ -37,6 +32,14 @@ import Cardano.Ledger.BaseTypes
     ShelleyBase,
     StrictMaybe (..),
     UnitInterval,
+  )
+import Cardano.Ledger.Chain
+  ( AdaPots (..),
+    ChainPredicateFailure (..),
+    chainChecks,
+    pparamsToChainChecksData,
+    totalAdaES,
+    totalAdaPotsES,
   )
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
@@ -49,20 +52,17 @@ import Cardano.Ledger.Keys
     KeyRole (..),
     coerceKeyRole,
   )
+import qualified Cardano.Ledger.Pretty as PP
 import Cardano.Ledger.Serialization (ToCBORGroup)
 import Cardano.Ledger.Shelley.Constraints (UsesValue)
 import Cardano.Ledger.Slot (EpochNo)
-import qualified Cardano.Ledger.Val as Val
 import Cardano.Protocol.TPraos (PoolDistr (..))
 import Cardano.Protocol.TPraos.BHeader
-  ( BHeader,
-    LastAppliedBlock (..),
-    bHeaderSize,
+  ( LastAppliedBlock (..),
     bhHash,
     bhbody,
     bheaderBlockNo,
     bheaderSlotNo,
-    hBbsize,
     lastAppliedHash,
     prevHashToNonce,
   )
@@ -73,10 +73,9 @@ import Cardano.Protocol.TPraos.Rules.Prtcl
     PrtlSeqFailure,
     prtlSeqChecks,
   )
+import Cardano.Protocol.TPraos.Rules.Tickn
 import Cardano.Slotting.Slot (SlotNo, WithOrigin (..))
 import Control.DeepSeq (NFData)
-import Control.Monad (unless)
-import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Trans.Reader (asks)
 import Control.State.Transition
   ( Embed (..),
@@ -89,7 +88,6 @@ import Control.State.Transition
     trans,
   )
 import Data.Default.Class (Default, def)
-import Data.Foldable (fold)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Void (Void)
@@ -116,8 +114,7 @@ import Shelley.Spec.Ledger.LedgerState
 import Shelley.Spec.Ledger.PParams (ProtVer (..))
 import Shelley.Spec.Ledger.STS.Bbody (BBODY, BbodyEnv (..), BbodyPredicateFailure, BbodyState (..))
 import Shelley.Spec.Ledger.STS.Tick (TICK, TickEvent, TickPredicateFailure)
-import Shelley.Spec.Ledger.STS.Tickn
-import Shelley.Spec.Ledger.UTxO (UTxO (..), balance)
+import Shelley.Spec.Ledger.UTxO (UTxO (..))
 
 data CHAIN era
 
@@ -142,16 +139,8 @@ deriving stock instance
 
 instance (Era era, TransUTxOState NFData era) => NFData (ChainState era)
 
-data ChainPredicateFailure era
-  = HeaderSizeTooLargeCHAIN
-      !Natural -- Header Size
-      !Natural -- Max Header Size
-  | BlockSizeTooLargeCHAIN
-      !Natural -- Block Size
-      !Natural -- Max Block Size
-  | ObsoleteNodeCHAIN
-      !Natural -- protocol version used
-      !Natural -- max protocol version
+data TestChainPredicateFailure era
+  = RealChainPredicateFailure !(ChainPredicateFailure era)
   | BbodyFailure !(PredicateFailure (Core.EraRule "BBODY" era)) -- Subtransition Failures
   | TickFailure !(PredicateFailure (Core.EraRule "TICK" era)) -- Subtransition Failures
   | TicknFailure !(PredicateFailure (Core.EraRule "TICKN" era)) -- Subtransition Failures
@@ -171,7 +160,7 @@ deriving stock instance
     Show (PredicateFailure (Core.EraRule "TICK" era)),
     Show (PredicateFailure (Core.EraRule "TICKN" era))
   ) =>
-  Show (ChainPredicateFailure era)
+  Show (TestChainPredicateFailure era)
 
 deriving stock instance
   ( Era era,
@@ -179,7 +168,7 @@ deriving stock instance
     Eq (PredicateFailure (Core.EraRule "TICK" era)),
     Eq (PredicateFailure (Core.EraRule "TICKN" era))
   ) =>
-  Eq (ChainPredicateFailure era)
+  Eq (TestChainPredicateFailure era)
 
 instance
   ( Era era,
@@ -187,7 +176,7 @@ instance
     NoThunks (PredicateFailure (Core.EraRule "TICK" era)),
     NoThunks (PredicateFailure (Core.EraRule "TICKN" era))
   ) =>
-  NoThunks (ChainPredicateFailure era)
+  NoThunks (TestChainPredicateFailure era)
 
 -- | Creates a valid initial chain state
 initialShelleyState ::
@@ -275,51 +264,11 @@ instance
   type Environment (CHAIN era) = ()
   type BaseM (CHAIN era) = ShelleyBase
 
-  type PredicateFailure (CHAIN era) = ChainPredicateFailure era
+  type PredicateFailure (CHAIN era) = TestChainPredicateFailure era
   type Event (CHAIN era) = ChainEvent era
 
   initialRules = []
   transitionRules = [chainTransition]
-
-data ChainChecksData = ChainChecksData
-  { ccMaxBHSize :: Natural,
-    ccMaxBBSize :: Natural,
-    ccProtocolVersion :: ProtVer
-  }
-  deriving (Show, Eq, Generic, NoThunks)
-
-pparamsToChainChecksData ::
-  ( HasField "_maxBHSize" pp Natural,
-    HasField "_maxBBSize" pp Natural,
-    HasField "_protocolVersion" pp ProtVer
-  ) =>
-  pp ->
-  ChainChecksData
-pparamsToChainChecksData pp =
-  ChainChecksData
-    { ccMaxBHSize = getField @"_maxBHSize" pp,
-      ccMaxBBSize = getField @"_maxBBSize" pp,
-      ccProtocolVersion = getField @"_protocolVersion" pp
-    }
-
-chainChecks ::
-  ( Era era,
-    MonadError (PredicateFailure (CHAIN era)) m
-  ) =>
-  Natural ->
-  ChainChecksData ->
-  BHeader (Crypto era) ->
-  m ()
-chainChecks maxpv ccd bh = do
-  unless (m <= maxpv) $ throwError (ObsoleteNodeCHAIN m maxpv)
-  unless (fromIntegral (bHeaderSize bh) <= ccMaxBHSize ccd) $
-    throwError $
-      HeaderSizeTooLargeCHAIN (fromIntegral $ bHeaderSize bh) (ccMaxBHSize ccd)
-  unless (hBbsize (bhbody bh) <= ccMaxBBSize ccd) $
-    throwError $
-      BlockSizeTooLargeCHAIN (hBbsize (bhbody bh)) (ccMaxBBSize ccd)
-  where
-    (ProtVer m _) = ccProtocolVersion ccd
 
 chainTransition ::
   forall era.
@@ -371,7 +320,7 @@ chainTransition =
         maxpv <- liftSTS $ asks maxMajorPV
         case chainChecks maxpv chainChecksData bh of
           Right () -> pure ()
-          Left e -> failBecause e
+          Left e -> failBecause (RealChainPredicateFailure e)
 
         let s = bheaderSlotNo $ bhbody bh
 
@@ -462,36 +411,6 @@ instance
   wrapFailed = PrtclFailure
   wrapEvent = PrtclEvent
 
-data AdaPots = AdaPots
-  { treasuryAdaPot :: Coin,
-    reservesAdaPot :: Coin,
-    rewardsAdaPot :: Coin,
-    utxoAdaPot :: Coin,
-    depositsAdaPot :: Coin,
-    feesAdaPot :: Coin
-  }
-  deriving (Show, Eq)
-
--- | Calculate the total ada pots in the epoch state
-totalAdaPotsES ::
-  UsesValue era =>
-  EpochState era ->
-  AdaPots
-totalAdaPotsES (EpochState (AccountState treasury_ reserves_) _ ls _ _ _) =
-  AdaPots
-    { treasuryAdaPot = treasury_,
-      reservesAdaPot = reserves_,
-      rewardsAdaPot = rewards_,
-      utxoAdaPot = circulation,
-      depositsAdaPot = deposits,
-      feesAdaPot = fees_
-    }
-  where
-    (UTxOState u deposits fees_ _) = _utxoState ls
-    (DPState ds _) = _delegationState ls
-    rewards_ = fold (Map.elems (_rewards ds))
-    circulation = Val.coin $ balance u
-
 -- | Calculate the total ada pots in the chain state
 totalAdaPots ::
   UsesValue era =>
@@ -499,25 +418,22 @@ totalAdaPots ::
   AdaPots
 totalAdaPots = totalAdaPotsES . nesEs . chainNes
 
--- | Calculate the total ada in the epoch state
-totalAdaES :: UsesValue era => EpochState era -> Coin
-totalAdaES cs =
-  treasuryAdaPot
-    <> reservesAdaPot
-    <> rewardsAdaPot
-    <> utxoAdaPot
-    <> depositsAdaPot
-    <> feesAdaPot
-  where
-    AdaPots
-      { treasuryAdaPot,
-        reservesAdaPot,
-        rewardsAdaPot,
-        utxoAdaPot,
-        depositsAdaPot,
-        feesAdaPot
-      } = totalAdaPotsES cs
-
 -- | Calculate the total ada in the chain state
 totalAda :: UsesValue era => ChainState era -> Coin
 totalAda = totalAdaES . nesEs . chainNes
+
+ppChainState :: PP.CanPrettyPrintLedgerState era => ChainState era -> PP.PDoc
+ppChainState (ChainState nes ocert epochnonce evolvenonce prevnonce candnonce lastab) =
+  PP.ppRecord
+    "ChainState"
+    [ ("newepoch", PP.ppNewEpochState nes),
+      ("ocerts", PP.ppMap PP.ppKeyHash PP.ppWord64 ocert),
+      ("epochNonce", PP.ppNonce epochnonce),
+      ("evolvingNonce", PP.ppNonce evolvenonce),
+      ("candidateNonce", PP.ppNonce prevnonce),
+      ("prevepochNonce", PP.ppNonce candnonce),
+      ("lastApplidBlock", PP.ppWithOrigin PP.ppLastAppliedBlock lastab)
+    ]
+
+instance PP.CanPrettyPrintLedgerState era => PP.PrettyA (ChainState era) where
+  prettyA = ppChainState

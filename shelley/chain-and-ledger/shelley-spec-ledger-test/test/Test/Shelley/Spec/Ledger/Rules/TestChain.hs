@@ -69,7 +69,6 @@ import Data.TreeDiff.QuickCheck (ediffEq)
 import Data.Word (Word64)
 import Shelley.Spec.Ledger.API
   ( ApplyBlock,
-    CHAIN,
     DELEG,
     GetLedgerView,
   )
@@ -83,7 +82,6 @@ import Shelley.Spec.Ledger.EpochBoundary (obligation)
 import Shelley.Spec.Ledger.LedgerState hiding (circulation)
 import Shelley.Spec.Ledger.PParams (ProtVer)
 import Shelley.Spec.Ledger.Rewards (sumRewards)
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..), totalAda, totalAdaPots)
 import Shelley.Spec.Ledger.STS.Deleg (DelegEnv (..))
 import Shelley.Spec.Ledger.STS.Ledger (LedgerEnv (..))
 import Shelley.Spec.Ledger.STS.Pool (POOL, PoolEnv (..))
@@ -92,6 +90,7 @@ import Shelley.Spec.Ledger.Scripts (ScriptHash)
 import Shelley.Spec.Ledger.Tx
 import Shelley.Spec.Ledger.TxBody
 import Shelley.Spec.Ledger.UTxO (UTxO (..), balance, totalDeposits, txins, txouts, pattern UTxO)
+import Test.Cardano.Ledger.Chain (CHAIN, ChainState (..), totalAda, totalAdaPots)
 import Test.QuickCheck
   ( Property,
     Testable (..),

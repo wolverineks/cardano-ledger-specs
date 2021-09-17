@@ -97,7 +97,6 @@ import Shelley.Spec.Ledger.LedgerState
     UTxOState,
   )
 import Shelley.Spec.Ledger.PParams (PParams' (..))
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.STS.Delegs (DelegsEnv)
 import Shelley.Spec.Ledger.STS.Delpl (DelplEnv, DelplPredicateFailure)
 import Shelley.Spec.Ledger.STS.Ledger (LedgerEnv (..))
@@ -106,6 +105,7 @@ import Shelley.Spec.Ledger.TxBody (DCert, TxIn)
 import System.Timeout
 import Test.Cardano.Ledger.Alonzo.AlonzoEraGen ()
 import qualified Test.Cardano.Ledger.Alonzo.PropertyTests as Alonzo
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Cardano.Ledger.EraBuffet (TestCrypto)
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (Mock)
 import Test.Shelley.Spec.Ledger.Generator.Block (genBlock)

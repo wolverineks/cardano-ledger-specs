@@ -40,7 +40,6 @@ import Shelley.Spec.Ledger.BlockChain (Block, bheader)
 import Shelley.Spec.Ledger.EpochBoundary (SnapShot (_poolParams), emptySnapShot)
 import Shelley.Spec.Ledger.LedgerState (PulsingRewUpdate, emptyRewardUpdate)
 import Shelley.Spec.Ledger.PParams (PParams' (..))
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.Tx
   ( Tx (..),
     WitnessSetHKD (..),
@@ -55,6 +54,7 @@ import Shelley.Spec.Ledger.TxBody
     Wdrl (..),
   )
 import Shelley.Spec.Ledger.UTxO (UTxO (..), makeWitnessesVKey, txid)
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (ExMock)
 import Test.Shelley.Spec.Ledger.Examples (CHAINExample (..), testCHAINExample)
 import qualified Test.Shelley.Spec.Ledger.Examples.Cast as Cast

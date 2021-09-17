@@ -71,11 +71,11 @@ import Shelley.Spec.Ledger.API
   )
 import Shelley.Spec.Ledger.LedgerState (UTxOState (..))
 import Shelley.Spec.Ledger.PParams (ProtVer, Update)
-import Shelley.Spec.Ledger.STS.Chain (CHAIN, ChainState)
 import Shelley.Spec.Ledger.STS.Utxo (UtxoEnv)
 import Shelley.Spec.Ledger.Tx (TxId (TxId))
 import Shelley.Spec.Ledger.TxBody (DCert, TxIn, Wdrl, WitVKey)
 import Shelley.Spec.Ledger.UTxO (UTxO)
+import Test.Cardano.Ledger.Chain (CHAIN, ChainState)
 import Test.QuickCheck (Gen, choose, shuffle)
 import Test.Shelley.Spec.Ledger.Generator.Constants (Constants (..))
 import Test.Shelley.Spec.Ledger.Generator.Core

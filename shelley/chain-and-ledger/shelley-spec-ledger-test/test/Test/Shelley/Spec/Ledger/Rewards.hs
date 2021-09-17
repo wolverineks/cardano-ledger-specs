@@ -119,8 +119,8 @@ import Shelley.Spec.Ledger.Rewards
     mkApparentPerformance,
     sumRewards,
   )
-import Shelley.Spec.Ledger.STS.Chain (ChainState (..))
 import Shelley.Spec.Ledger.TxBody (PoolParams (..), RewardAcnt (..))
+import Test.Cardano.Ledger.Chain (ChainState (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (C)
 import Test.Shelley.Spec.Ledger.Generator.Core (genCoin, genNatural)
 import Test.Shelley.Spec.Ledger.Generator.ShelleyEraGen ()

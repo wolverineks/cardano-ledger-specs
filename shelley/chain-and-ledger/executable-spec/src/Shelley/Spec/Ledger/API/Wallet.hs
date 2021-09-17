@@ -46,6 +46,7 @@ import Cardano.Protocol.TPraos
   )
 import Cardano.Protocol.TPraos.BHeader (checkLeaderValue, mkSeed, seedL)
 import Cardano.Protocol.TPraos.Rules.Overlay (isOverlaySlot)
+import Cardano.Protocol.TPraos.Rules.Tickn (TicknState (..))
 import Cardano.Slotting.EpochInfo (epochInfoRange)
 import Cardano.Slotting.Slot (EpochSize, SlotNo)
 import Control.Monad.Trans.Reader (runReader)
@@ -93,7 +94,6 @@ import Shelley.Spec.Ledger.Rewards
     percentile',
   )
 import Shelley.Spec.Ledger.STS.NewEpoch (calculatePoolDistr)
-import Shelley.Spec.Ledger.STS.Tickn (TicknState (..))
 import Shelley.Spec.Ledger.Tx (Tx (..), WitnessSet, WitnessSetHKD (..))
 import Shelley.Spec.Ledger.TxBody (DCert, PoolParams (..), TxIn (..), WitVKey (..))
 import Shelley.Spec.Ledger.UTxO (UTxO (..))

@@ -44,6 +44,7 @@ import Cardano.Ledger.BaseTypes
     ShelleyBase,
     UnitInterval,
   )
+import Cardano.Ledger.Chain (ChainChecksData, pparamsToChainChecksData)
 import Cardano.Ledger.Core (ChainData, SerialisableData)
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Crypto as CC (Crypto, StandardCrypto)
@@ -74,6 +75,7 @@ import Cardano.Protocol.TPraos.BHeader
   )
 import Cardano.Protocol.TPraos.OCert (OCertSignable)
 import qualified Cardano.Protocol.TPraos.Rules.Prtcl as STS.Prtcl
+import qualified Cardano.Protocol.TPraos.Rules.Tickn as STS.Tickn
 import Control.Arrow (left, right)
 import Control.Monad.Except
 import Control.Monad.Trans.Reader (runReader)
@@ -103,10 +105,8 @@ import Shelley.Spec.Ledger.LedgerState
     _genDelegs,
   )
 import Shelley.Spec.Ledger.PParams (PParams' (..), ProtVer)
-import Shelley.Spec.Ledger.STS.Chain (ChainChecksData, pparamsToChainChecksData)
 import Shelley.Spec.Ledger.STS.EraMapping ()
 import Shelley.Spec.Ledger.STS.Tick (TickfPredicateFailure)
-import qualified Shelley.Spec.Ledger.STS.Tickn as STS.Tickn
 
 -- =======================================================
 

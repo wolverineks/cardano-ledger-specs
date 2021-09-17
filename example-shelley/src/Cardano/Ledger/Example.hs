@@ -26,6 +26,7 @@ import Cardano.Ledger.Shelley.Constraints (UsesPParams (..), UsesTxBody, UsesTxO
 import Cardano.Ledger.Val (Val ((<->)))
 import Cardano.Protocol.TPraos.Rules.OCert (OCERT)
 import Cardano.Protocol.TPraos.Rules.Overlay (OVERLAY)
+import Cardano.Protocol.TPraos.Rules.Tickn (TICKN)
 import qualified Data.ByteString as BS
 import Data.Default.Class (def)
 import qualified Data.Map.Strict as Map
@@ -80,7 +81,6 @@ import Shelley.Spec.Ledger.STS.Ppup (PPUP)
 import Shelley.Spec.Ledger.STS.Rupd (RUPD)
 import Shelley.Spec.Ledger.STS.Snap (SNAP)
 import Shelley.Spec.Ledger.STS.Tick (TICK, TICKF)
-import Shelley.Spec.Ledger.STS.Tickn (TICKN)
 import Shelley.Spec.Ledger.STS.Upec (UPEC)
 import Shelley.Spec.Ledger.STS.Utxo (UTXO)
 import Shelley.Spec.Ledger.STS.Utxow (UTXOW)

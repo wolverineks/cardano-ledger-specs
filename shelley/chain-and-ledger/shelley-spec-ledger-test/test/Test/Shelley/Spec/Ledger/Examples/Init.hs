@@ -41,11 +41,11 @@ import Shelley.Spec.Ledger.PParams
     PParams' (..),
     emptyPParams,
   )
-import Shelley.Spec.Ledger.STS.Chain
+import Shelley.Spec.Ledger.UTxO (UTxO (..), balance)
+import Test.Cardano.Ledger.Chain
   ( ChainState (..),
     initialShelleyState,
   )
-import Shelley.Spec.Ledger.UTxO (UTxO (..), balance)
 import Test.Shelley.Spec.Ledger.Examples.Federation (genDelegs)
 import Test.Shelley.Spec.Ledger.Utils (ShelleyTest, maxLLSupply, mkHash, unsafeBoundRational)
 

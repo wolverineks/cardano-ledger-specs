@@ -31,9 +31,14 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Word (Word64)
 import GHC.Records (HasField (..))
 import Shelley.Spec.Ledger.LedgerState hiding (circulation)
-import Shelley.Spec.Ledger.STS.Chain (CHAIN, ChainEvent (..), ChainPredicateFailure (..), ChainState (..))
 import Shelley.Spec.Ledger.UTxO (UTxO (..))
 import Test.Cardano.Ledger.Alonzo.AlonzoEraGen (sumCollateral)
+import Test.Cardano.Ledger.Chain
+  ( CHAIN,
+    ChainEvent (..),
+    ChainState (..),
+    TestChainPredicateFailure (..),
+  )
 import Test.Cardano.Ledger.EraBuffet (TestCrypto)
 import Test.QuickCheck (Property, conjoin, counterexample, (.&&.))
 import Test.Shelley.Spec.Ledger.Rules.TestChain (forAllChainTrace, ledgerTraceFromBlock)

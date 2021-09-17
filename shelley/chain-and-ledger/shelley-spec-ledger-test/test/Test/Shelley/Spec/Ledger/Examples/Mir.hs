@@ -47,7 +47,6 @@ import Shelley.Spec.Ledger.LedgerState
   )
 import Shelley.Spec.Ledger.PParams (PParams' (..))
 import Shelley.Spec.Ledger.STS.Bbody (BbodyPredicateFailure (..))
-import Shelley.Spec.Ledger.STS.Chain (ChainPredicateFailure (..), ChainState (..))
 import Shelley.Spec.Ledger.STS.Deleg (DelegPredicateFailure (..))
 import Shelley.Spec.Ledger.STS.Delegs (DelegsPredicateFailure (..))
 import Shelley.Spec.Ledger.STS.Delpl (DelplPredicateFailure (..))
@@ -65,6 +64,7 @@ import Shelley.Spec.Ledger.TxBody
     Wdrl (..),
   )
 import Shelley.Spec.Ledger.UTxO (UTxO (..), makeWitnessesVKey)
+import Test.Cardano.Ledger.Chain (ChainState (..), TestChainPredicateFailure (..))
 import Test.Shelley.Spec.Ledger.ConcreteCryptoTypes (ExMock, Mock)
 import Test.Shelley.Spec.Ledger.Examples (CHAINExample (..), testCHAINExample)
 import qualified Test.Shelley.Spec.Ledger.Examples.Cast as Cast
