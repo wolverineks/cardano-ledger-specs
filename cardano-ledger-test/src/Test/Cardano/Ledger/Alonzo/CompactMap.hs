@@ -8,6 +8,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module  Test.Cardano.Ledger.Alonzo.CompactMap where
 
@@ -135,57 +136,117 @@ withBoth primsize normsize process = runST $ do
    arr4 <- MutA.freeze arr2
    pure(arr3,arr4)
 
+-- ==============================
 
--- | If the 'group' is full, serialise it, and then write it to 'arr' a index 'i'
---   Aways return the next index and the next group. Most times the group grows
---   but the index says the same. The index grows only when the group becomes full.
-writegroup:: ToCBOR v => Int -> [v] -> STArray s Int ByteString -> Int -> v -> ST s ([v], Int)
-writegroup groupsize group arr i v  = do
-   let group2 = v : group
-   if length group2 == groupsize
-      then do MutA.writeArray arr i (serialize' (reverse group2))
-              pure ([],i+1)
-      else pure (group2,i)
+arraySize arr = (hi-lo) +1 where (lo,hi) = A.bounds arr
 
 readFromGroup :: forall v. FromCBOR v => Int -> A.Array Int ByteString -> Int -> v
 readFromGroup groupsize arr i =  (vals !! (i `mod` groupsize))
   where vals :: [ v ]
         vals = unsafeDeserialize' (index arr (i `div` groupsize))
-       
 
-flush :: forall a v. (ToCBOR v,Ord a, Prim a) =>
-         Int -> PrimArray a -> A.Array Int ByteString -> [(a,v)] -> (PrimArray a,A.Array Int ByteString)
-flush groupsize keys values list = withBoth newsize normsize process where
-   oldsize = sizeofPrimArray keys
-   newsize = oldsize + foldl' (accumSize keys) 0 (map fst list)
+
+-- | If the 'group' is full, serialise it, and then write it to 'mvalues' a index 'jv'
+--   Aways return the next index and the next group. Most times the group grows
+--   but the index says the same. The index grows only when the group becomes full.
+resetNewGroup:: (Show v,ToCBOR v) => Int -> v -> STArray s Int ByteString -> Int -> [v] -> ST s (Int,[v])
+resetNewGroup groupsize v mvalues jv group  = do
+   if length group == groupsize - 1
+      then trace ("Serialize "++show newgroup++" "++show jv) $
+           do { MutA.writeArray mvalues jv (serialize' newgroup); pure(jv+1,[]) }
+      else pure(jv, v : group)
+   where newgroup = (reverse (v : group))
+
+
+-- | Every 'groupsize' entries into the 'keys' array, we advance one entry into the 'values' array.
+--   A 'group' is a deserialized entry from the 'values' array, for groupsize 'keys' entries.
+--   So when we advance the index into the 'keys' array, and its group moves to next entry in the
+--   'values' array, we need to fetch that group and deserialize it.
+--   Note this can only happen when we advance the index into the 'keys' array.
+resetOldGroup :: FromCBOR v => Int -> A.Array Int ByteString -> Int -> Int -> [v] -> (Int,[v])
+resetOldGroup groupsize values ik iv oldgroup  = trace ("RESET OLD GROUP(ik,iv,groupsize)="++show(ik,iv,groupsize)) $
+   if ((ik `mod` groupsize) == 0)
+      then (iv+1,nextgroup)
+      else (iv,oldgroup) 
+   where nextgroup = trace ("DESERIALIZE RESET OLD GROUP") $ unsafeDeserialize' (index values (iv+1))
+
+flush :: forall a v. (ToCBOR v,FromCBOR v,Show v,Ord a, Prim a,Show a) =>
+         Int ->
+         PrimArray a ->
+         A.Array Int ByteString ->
+         [(a,Message v)] ->
+         (Message v -> v -> Message v) ->
+         (PrimArray a,A.Array Int ByteString)
+flush groupsize keys values list combine = trace ("NEWSIZES "++show(newsize,normsize)) $
+                                           withBoth newsize normsize process where
+   keysize = sizeofPrimArray keys
+   valsize = arraySize values
+   newsize = keysize + foldl' (accumSize keys) 0 (map fst list)
    normsize = if newsize `mod` groupsize == 0
                  then newsize `div` groupsize
                  else (newsize `div` groupsize) + 1
    sortedlist = sortBy (\ x y -> compare (fst x) (fst y)) list
+   -- group0 :: [v]
+   -- group0 =  unsafeDeserialize' (index values 0)
+   
    process :: forall s. MutablePrimArray s a -> STArray s Int ByteString -> ST s ()
-   process mkeys mvalues = loop 0 0 0 sortedlist [] 
-     where loop i next nextg xs group = 
-            case (i < oldsize, next < newsize, xs) of
-              (True,True,((x,v):ys)) ->
-                do let y = indexPrimArray keys i
-                   case compare x y of
-                     EQ -> do writePrimArray mkeys next x
-                              (group2,nextg2) <- writegroup groupsize group mvalues nextg v
-                              loop (i+1) (next+1) nextg2 ys group2
-                     LT -> do writePrimArray mkeys next x
-                              loop i (next+1) nextg ys group 
-                     GT -> do writePrimArray mkeys next y
-                              loop (i+1) (next+1) nextg ys group
-              (True,True,[]) ->
-                 copyPrimArray mkeys next keys i (oldsize - i)
-              (False,True,((x,v):xs)) ->
-                do writePrimArray mkeys next x
-                   loop i (next+1) nextg xs group
+   process mkeys mvalues = loop 0 0 0 0 sortedlist [] 
+     where pushFromList :: Int -> Int -> Int -> Int -> (a,Message v) -> [(a,Message v)] -> [v] -> ST s ()
+           pushFromList ik iv jk jv (k,Delete) vs newgroup =
+              loop ik iv jk jv vs newgroup -- Skip over because its is deleted
+           pushFromList ik -- index into keys
+                        iv -- index into values
+                        jk -- index into mkeys
+                        jv -- index into mvalues
+                        (k,Edit v)
+                        vs
+                        newgroup = do
+              writePrimArray mkeys jk k
+              (jv',newgroup') <- resetNewGroup groupsize v mvalues jv newgroup
+              loop ik iv (jk+1) jv' vs newgroup'
+           pushFromArray ik iv jk jv (k,v) vs newgroup = do
+              writePrimArray mkeys jk k
+              (jv',newgroup') <- resetNewGroup groupsize v mvalues jv newgroup
+              -- let (iv',oldgroup') = resetOldGroup groupsize values (ik+1) iv oldgroup
+              loop (ik+1) iv (jk+1) jv' vs newgroup'              
+           loop :: Int -> Int -> Int -> Int -> [(a,Message v)] -> [v] -> ST s ()
+           loop ik iv jk jv xs newgroup =
+             trace ("\n  "++show (ik,iv,jk,jv,xs,newgroup)) $
+               case (ik < keysize, iv < valsize, jk < newsize, xs) of
+                  (True,True,True,pairs) -> 
+                    let k2 = indexPrimArray keys ik
+                        v2 = readFromGroup groupsize values ik
+                    in trace ("ARRAY PAIRS "++show(k2,v2)) $
+                       case pairs of
+                        [] -> pushFromArray ik iv jk jv (k2,v2) [] newgroup
+                        ((k,v):ys) ->
+                           case compare k k2 of
+                             EQ -> pushFromList ik iv jk jv (k,v) ys newgroup
+                             LT -> pushFromList ik iv jk jv (k,combine v v2) ys newgroup
+                             GT -> pushFromArray ik iv jk jv (k2,v2) xs newgroup
+                  (False,_,True,((k,v):xs)) -> pushFromList ik iv jk jv (k,v) xs newgroup
               -- This case should only happen when we have run out of things to process
-              -- (i >= oldsize), so there is nothing left to copy from 'arr'
+              -- (ik >= keysize), so there is nothing left to copy from 'arr'
               -- or xs is null , so there is nothing left to copy from 'list'
-              other -> pure ()
-     
+              -- or jk >= newsize, so mkeys is already full
+                  other -> pure ()
+
+
+testflush :: Par2 Int Text -> Par2 Int Text     
+testflush (Par2 groupsize keys values delta) = Par2 groupsize ks vs Map.empty
+   where (ks,vs) = flush groupsize keys values (Map.toList delta) (\ new old -> new <> (Edit old))
+
+
+m2 :: Map.Map Int Text
+m2 = Map.fromList [(1::Int,pack "a"),(2,pack "b"),(9,pack "d"),(5,pack "c")]
+
+p2 = insert2 10 "e" (insert2 12 "f" (toPar2 3 m2))
+
+instance ToCBOR v => ToCBOR (Message v) where
+  toCBOR (Edit v) = toCBOR v
+
+instance FromCBOR v => FromCBOR (Message v) where
+  fromCBOR = Edit <$> fromCBOR
 
 -- =========================================
 
@@ -341,6 +402,7 @@ toPar m = ParVector keys values
 
 m1 :: Map.Map Int Char
 m1 = Map.fromList [(1::Int,'a'),(2,'b'),(9,'c'),(5,'d')]
+
 
 
 look :: Ord k => k -> ParVector k v -> Maybe v
